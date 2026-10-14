@@ -1,0 +1,28 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "PrintingSlips", "PrintingSlips\PrintingSlips.csproj", "{5300462F-1F15-4886-BD80-2AD00CD746A1}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ApplicationView", "ApplicationView\ApplicationView.csproj", "{039A4D7E-A764-4330-B081-BFBD17AFDBDA}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ConsoleTest", "ConsoleTest\ConsoleTest.csproj", "{CB65301B-2AE1-4433-A2AE-BB6BFABD25AD}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{5300462F-1F15-4886-BD80-2AD00CD746A1}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{5300462F-1F15-4886-BD80-2AD00CD746A1}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{5300462F-1F15-4886-BD80-2AD00CD746A1}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{5300462F-1F15-4886-BD80-2AD00CD746A1}.Release|Any CPU.Build.0 = Release|Any CPU
+		{039A4D7E-A764-4330-B081-BFBD17AFDBDA}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{039A4D7E-A764-4330-B081-BFBD17AFDBDA}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{039A4D7E-A764-4330-B081-BFBD17AFDBDA}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{039A4D7E-A764-4330-B081-BFBD17AFDBDA}.Release|Any CPU.Build.0 = Release|Any CPU
+		{CB65301B-2AE1-4433-A2AE-BB6BFABD25AD}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{CB65301B-2AE1-4433-A2AE-BB6BFABD25AD}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{CB65301B-2AE1-4433-A2AE-BB6BFABD25AD}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{CB65301B-2AE1-4433-A2AE-BB6BFABD25AD}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+EndGlobal

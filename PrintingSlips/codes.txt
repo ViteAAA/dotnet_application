@@ -1,0 +1,2 @@
+﻿customer_key        = ck_5a3ecec64823b34b51571946dd2cb598a591b6b6
+customer_secret_key = cs_f22afedef524e44fd36489bac793384f41b9489d
