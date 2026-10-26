@@ -22,14 +22,16 @@ public class PdfSlipExporter : IPdfSlipExporter
         PrintFormType formType,
         Slip slip,
         float widthMm = 80,
-        IReadOnlyList<ReceiptField>? fields = null)
+        IReadOnlyList<ReceiptField>? fields = null,
+        string fontFamily = "Courier New")
     {
+        var family = string.IsNullOrWhiteSpace(fontFamily) ? "Courier New" : fontFamily;
         return formType switch
         {
-            PrintFormType.KitchenSlip => ExportKitchenSlipPdf(slip, widthMm),
-            PrintFormType.CustomTemplate when fields is { Count: > 0 } => ExportTemplatePdf(slip, widthMm, fields),
-            PrintFormType.TestPage => ExportTestPagePdf(widthMm),
-            _ => ExportInvoicePdf(slip, widthMm)
+            PrintFormType.KitchenSlip => ExportKitchenSlipPdf(slip, widthMm, family),
+            PrintFormType.CustomTemplate when fields is { Count: > 0 } => ExportTemplatePdf(slip, widthMm, fields, family),
+            PrintFormType.TestPage => ExportTestPagePdf(widthMm, family),
+            _ => ExportInvoicePdf(slip, widthMm, family)
         };
     }
 
@@ -62,8 +64,9 @@ public class PdfSlipExporter : IPdfSlipExporter
     #region Экспорт накладной (Invoice)
 
     [Obsolete("Obsolete")]
-    public byte[] ExportInvoicePdf(Slip slip, float widthMm = 58)
+    public byte[] ExportInvoicePdf(Slip slip, float widthMm = 58, string fontFamily = "Courier New")
     {
+        fontFamily = string.IsNullOrWhiteSpace(fontFamily) ? "Courier New" : fontFamily;
         float widthInPoints = widthMm * 2.83465f;
         var baseSize = widthMm <= 60 ? 7f : 8f;
         var dateStr = (slip.OrderDate ?? DateTime.Now).ToString("HH:mm dd.MM.yyyy");
@@ -74,7 +77,7 @@ public class PdfSlipExporter : IPdfSlipExporter
             {
                 page.ContinuousSize(widthInPoints);
                 page.Margin(6);
-                page.DefaultTextStyle(x => x.FontFamily("Courier New").FontSize(baseSize));
+                page.DefaultTextStyle(x => x.FontFamily(fontFamily).FontSize(baseSize));
 
                 page.Content().Column(col =>
                 {
@@ -223,8 +226,9 @@ public class PdfSlipExporter : IPdfSlipExporter
 
     #region Экспорт кухонного чека (Kitchen Slip)
 
-    public byte[] ExportKitchenSlipPdf(Slip slip, float widthMm = 80)
+    public byte[] ExportKitchenSlipPdf(Slip slip, float widthMm = 80, string fontFamily = "Courier New")
     {
+        fontFamily = string.IsNullOrWhiteSpace(fontFamily) ? "Courier New" : fontFamily;
         float widthInPoints = widthMm * 2.83465f;
         var baseSize = widthMm <= 60 ? 7.5f : 8.5f;
         var currentTime = DateTime.Now.ToString("HH:mm");
@@ -239,7 +243,7 @@ public class PdfSlipExporter : IPdfSlipExporter
                 page.ContinuousSize(widthInPoints);
                 page.Margin(6);
                 page.MarginTop(30);
-                page.DefaultTextStyle(x => x.FontFamily("Courier New").FontSize(baseSize));
+                page.DefaultTextStyle(x => x.FontFamily(fontFamily).FontSize(baseSize));
 
                 page.Content().Column(col =>
                 {
@@ -298,8 +302,9 @@ public class PdfSlipExporter : IPdfSlipExporter
 
     #region Экспорт по динамическому шаблону (ReceiptField)
 
-    public byte[] ExportTemplatePdf(Slip slip, float widthMm, IReadOnlyList<ReceiptField> fields)
+    public byte[] ExportTemplatePdf(Slip slip, float widthMm, IReadOnlyList<ReceiptField> fields, string fontFamily = "Courier New")
     {
+        fontFamily = string.IsNullOrWhiteSpace(fontFamily) ? "Courier New" : fontFamily;
         float widthInPoints = widthMm * 2.83465f;
         var baseSize = widthMm <= 60 ? 7f : 8f;
 
@@ -309,7 +314,7 @@ public class PdfSlipExporter : IPdfSlipExporter
             {
                 page.ContinuousSize(widthInPoints);
                 page.Margin(6);
-                page.DefaultTextStyle(x => x.FontFamily("Courier New").FontSize(baseSize));
+                page.DefaultTextStyle(x => x.FontFamily(fontFamily).FontSize(baseSize));
 
                 page.Content().Column(col =>
                 {
@@ -343,8 +348,9 @@ public class PdfSlipExporter : IPdfSlipExporter
 
     #region Экспорт тестовой страницы (Test Page)
 
-    public byte[] ExportTestPagePdf(float widthMm = 80)
+    public byte[] ExportTestPagePdf(float widthMm = 80, string fontFamily = "Courier New")
     {
+        fontFamily = string.IsNullOrWhiteSpace(fontFamily) ? "Courier New" : fontFamily;
         float widthInPoints = widthMm * 2.83465f;
 
         var doc = Document.Create(container =>
@@ -353,7 +359,7 @@ public class PdfSlipExporter : IPdfSlipExporter
             {
                 page.ContinuousSize(widthInPoints);
                 page.Margin(6);
-                page.DefaultTextStyle(x => x.FontFamily("Courier New").FontSize(8f));
+                page.DefaultTextStyle(x => x.FontFamily(fontFamily).FontSize(8f));
 
                 page.Content().Column(col =>
                 {

@@ -38,18 +38,17 @@ public class PrintingService : IXPrintingService
         // ТЗ: принтер 1 (~58 мм) = пречек/накладная; принтер 2 (~80 мм) = кухня.
         // Сохранённый шаблон (CustomTemplate) перекрывает встроенные формы.
         // Пустой шаблон → выбор по PaperWidthMm: ≤60 Invoice, >60 Kitchen.
-        // FontSize полей — в CustomTemplate; DefaultFontSize принтера — для Invoice/Kitchen.
+        // FontSize полей — в CustomTemplate; FontFamily принтера — на весь чек (PDF).
         var formType = fields is { Count: > 0 }
             ? PrintFormType.CustomTemplate
             : width > 60
                 ? PrintFormType.KitchenSlip
                 : PrintFormType.Invoice;
 
-        // Автоматически экспортируем PDF для этой формы
-        ExportPdfPreview(slip, formType, width, fields);
+        var fontFamily = string.IsNullOrWhiteSpace(printer.FontFamily) ? "Courier New" : printer.FontFamily;
+        ExportPdfPreview(slip, formType, width, fields, fontFamily);
 
-        var baseFont = Math.Clamp(printer.BaseFontSize, 1, 3);
-        var result = _documentBuilder.BuildForm(formType, slip, width, profile, fields, baseFont);
+        var result = _documentBuilder.BuildForm(formType, slip, width, profile, fields);
 
         // Отправляем байты на оборудование
         return await SendToDestinationAsync(printer, result.EscPosBytes, $"Slip_{slip.OrderId}");
@@ -94,11 +93,11 @@ public class PrintingService : IXPrintingService
         return _pdfExporter.SavePdfToFile(folder, formType, slip, widthMm, fields);
     }
 
-    private void ExportPdfPreview(Slip slip, PrintFormType formType, float width, IReadOnlyList<ReceiptField>? fields)
+    private void ExportPdfPreview(Slip slip, PrintFormType formType, float width, IReadOnlyList<ReceiptField>? fields, string fontFamily = "Courier New")
     {
         try
         {
-            var pdfBytes = _pdfExporter.ExportFormPdf(formType, slip, width, fields);
+            var pdfBytes = _pdfExporter.ExportFormPdf(formType, slip, width, fields, fontFamily);
             var path = Path.Combine(AppContext.BaseDirectory, $"check_{slip.OrderId}.pdf");
             File.WriteAllBytes(path, pdfBytes);
         }

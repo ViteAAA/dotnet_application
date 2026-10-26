@@ -25,18 +25,16 @@ public class PrintDocumentBuilder : IPrintDocumentBuilder
         Slip slip,
         float widthMm,
         PrinterTextProfile profile,
-        IReadOnlyList<ReceiptField>? templateFields = null,
-        int baseFontSize = 1)
+        IReadOnlyList<ReceiptField>? templateFields = null)
     {
         var chars = GetCharsPerLine(widthMm);
-        var baseSize = Math.Clamp(baseFontSize, 1, 3);
         byte[] bytes = formType switch
         {
-            PrintFormType.KitchenSlip => BuildKitchenSlipEscPos(slip, widthMm, profile, baseSize),
+            PrintFormType.KitchenSlip => BuildKitchenSlipEscPos(slip, widthMm, profile),
             PrintFormType.CustomTemplate when templateFields is { Count: > 0 } =>
                 BuildTemplateEscPos(slip, widthMm, templateFields, profile),
             PrintFormType.TestPage => BuildTestPageEscPos(widthMm, profile),
-            _ => BuildInvoiceEscPos(slip, widthMm, profile, baseSize)
+            _ => BuildInvoiceEscPos(slip, widthMm, profile)
         };
 
         return new PrintFormResult
@@ -77,11 +75,10 @@ public class PrintDocumentBuilder : IPrintDocumentBuilder
 
     #region Формирование накладной (Invoice)
 
-    public byte[] BuildInvoiceEscPos(Slip slip, float widthMm, PrinterTextProfile profile, int baseFontSize = 1)
+    public byte[] BuildInvoiceEscPos(Slip slip, float widthMm, PrinterTextProfile profile)
     {
         var bytes = new List<byte>();
         int charsPerLine = GetCharsPerLine(widthMm);
-        int F(int relative) => Math.Clamp(Math.Clamp(baseFontSize, 1, 3) + (Math.Clamp(relative, 1, 3) - 1), 1, 3);
         string starsLine = new string('*', charsPerLine) + "\n";
         string separatorLine = new string('-', charsPerLine) + "\n";
         var encoding = profile.Encoding;
@@ -101,12 +98,12 @@ public class PrintDocumentBuilder : IPrintDocumentBuilder
 
         // Заголовок документа (НАКЛАДНАЯ / Заказ №)
         bytes.AddRange(EscAlignCenter);
-        bytes.AddRange(GetFontSizeCommand(F(2))); // Увеличенный шрифт (примерно FontSize 10 в QuestPDF)
+        bytes.AddRange(GetFontSizeCommand(2)); // Увеличенный шрифт (примерно FontSize 10 в QuestPDF)
         bytes.AddRange(EscBoldOn);
         bytes.AddRange(encoding.GetBytes("НАКЛАДНАЯ / INVOICE\n"));
         bytes.AddRange(encoding.GetBytes($"Заказ № / Order # {slip.OrderId}\n\n"));
         bytes.AddRange(EscBoldOff);
-        bytes.AddRange(GetFontSizeCommand(F(1)));
+        bytes.AddRange(GetFontSizeCommand(1));
 
         // Стороны и реквизиты
         bytes.AddRange(EscAlignLeft);
@@ -197,10 +194,10 @@ public class PrintDocumentBuilder : IPrintDocumentBuilder
         // Доставка и подвал
         bytes.AddRange(EscAlignLeft);
         bytes.AddRange(EscBoldOn);
-        bytes.AddRange(GetFontSizeCommand(F(2)));
+        bytes.AddRange(GetFontSizeCommand(2));
         bytes.AddRange(encoding.GetBytes($"{slip.DeliveryType ?? string.Empty}\n"));
         bytes.AddRange(EscBoldOff);
-        bytes.AddRange(GetFontSizeCommand(F(1)));
+        bytes.AddRange(GetFontSizeCommand(1));
 
         bytes.AddRange(EscAlignCenter);
         bytes.AddRange(encoding.GetBytes($"\n{slip.CurrencyNote ?? string.Empty}\n"));
@@ -214,11 +211,10 @@ public class PrintDocumentBuilder : IPrintDocumentBuilder
 
     #region Формирование кухонного чека (Kitchen Slip)
 
-    public byte[] BuildKitchenSlipEscPos(Slip slip, float widthMm, PrinterTextProfile profile, int baseFontSize = 1)
+    public byte[] BuildKitchenSlipEscPos(Slip slip, float widthMm, PrinterTextProfile profile)
     {
         var bytes = new List<byte>();
         var charsPerLine = GetCharsPerLine(widthMm);
-        int F(int relative) => Math.Clamp(Math.Clamp(baseFontSize, 1, 3) + (Math.Clamp(relative, 1, 3) - 1), 1, 3);
         var encoding = profile.Encoding;
         var orderTime = slip.OrderDate?.ToString("HH:mm") ?? DateTime.Now.ToString("HH:mm");
         // Крупное время сверху — «доставить к», как на образцах iiko; иначе время оформления.
@@ -230,20 +226,20 @@ public class PrintDocumentBuilder : IPrintDocumentBuilder
 
         bytes.AddRange(EscAlignCenter);
         bytes.AddRange(EscBoldOn);
-        bytes.AddRange(GetFontSizeCommand(F(3)));
+        bytes.AddRange(GetFontSizeCommand(3));
         AddWrappedLine(bytes, encoding, headlineTime, charsPerLine);
-        bytes.AddRange(GetFontSizeCommand(F(1)));
+        bytes.AddRange(GetFontSizeCommand(1));
         bytes.AddRange(EscBoldOff);
 
         AddSeparator(bytes, encoding, charsPerLine);
 
         bytes.AddRange(EscAlignCenter);
         bytes.AddRange(EscBoldOn);
-        bytes.AddRange(GetFontSizeCommand(F(2)));
+        bytes.AddRange(GetFontSizeCommand(2));
         AddWrappedLine(bytes, encoding, slip.DeliveryType ?? "Доставка / Delivery", charsPerLine);
         AddWrappedLine(bytes, encoding, $"ЗАКАЗ № / ORDER # {slip.OrderId}", charsPerLine);
         bytes.AddRange(EscBoldOff);
-        bytes.AddRange(GetFontSizeCommand(F(1)));
+        bytes.AddRange(GetFontSizeCommand(1));
 
         bytes.AddRange(EscAlignLeft);
         AddWrappedLine(bytes, encoding, $"Оформлен / Placed: {orderTime}", charsPerLine);

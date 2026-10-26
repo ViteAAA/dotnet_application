@@ -220,7 +220,7 @@ public partial class MainWindow : Window
                     Name = queue.FullName,
                     IsSelected = existing?.IsSelected ?? isDefault,
                     PaperWidthMm = existing?.PaperWidthMm > 0 ? existing.PaperWidthMm : 80,
-                    DefaultFontSize = existing?.DefaultFontSize is >= 1 and <= 3 ? existing.DefaultFontSize : 1,
+                    DefaultFontFamily = string.IsNullOrWhiteSpace(existing?.DefaultFontFamily) ? "Courier New" : existing.DefaultFontFamily,
                     ConnectionType = existing?.ConnectionType ?? "Windows",
                     Host = existing?.Host ?? string.Empty,
                     Port = existing?.Port > 0 ? existing.Port : 9100
@@ -463,7 +463,7 @@ public partial class MainWindow : Window
         ConnectionType = printer.ConnectionType,
         Host = printer.Host,
         Port = printer.Port,
-        BaseFontSize = Math.Clamp(printer.DefaultFontSize, 1, 3)
+        FontFamily = string.IsNullOrWhiteSpace(printer.DefaultFontFamily) ? "Courier New" : printer.DefaultFontFamily
     };
 
     private static void ApplyCompanyDefaults(Slip slip)
@@ -487,9 +487,23 @@ public partial class MainWindow : Window
         var defaultPrinter = Printers.FirstOrDefault(p => p.IsSelected)?.Name
                              ?? Printers.FirstOrDefault()?.Name;
         var widths = Printers.ToDictionary(p => p.Name, p => p.PaperWidthMm, StringComparer.OrdinalIgnoreCase);
-        var fonts = Printers.ToDictionary(p => p.Name, p => Math.Clamp(p.DefaultFontSize, 1, 3), StringComparer.OrdinalIgnoreCase);
+        var fonts = Printers.ToDictionary(
+            p => p.Name,
+            p => string.IsNullOrWhiteSpace(p.DefaultFontFamily) ? "Courier New" : p.DefaultFontFamily,
+            StringComparer.OrdinalIgnoreCase);
         var window = new ReceiptSettingsWindow(defaultPrinter, Printers.Select(p => p.Name), widths, fonts) { Owner = this };
-        window.ShowDialog();
+        if (window.ShowDialog() == true
+            && !string.IsNullOrWhiteSpace(window.SelectedPrinter)
+            && !string.IsNullOrWhiteSpace(window.SelectedFontFamily))
+        {
+            var item = Printers.FirstOrDefault(pr =>
+                string.Equals(pr.Name, window.SelectedPrinter, StringComparison.OrdinalIgnoreCase));
+            if (item != null)
+            {
+                item.DefaultFontFamily = window.SelectedFontFamily;
+                SavePrintersToStorage();
+            }
+        }
     }
 
     private void BtnAddNetworkPrinter_Click(object sender, RoutedEventArgs e)
@@ -503,7 +517,7 @@ public partial class MainWindow : Window
             Name = dialog.PrinterName,
             IsSelected = true,
             PaperWidthMm = dialog.PaperWidthMm,
-            DefaultFontSize = 1,
+            DefaultFontFamily = "Courier New",
             ConnectionType = "Network",
             Host = dialog.Host,
             Port = dialog.Port

@@ -1,4 +1,5 @@
 ﻿<Window x:Class="ApplicationView.MainWindow"
+        xmlns:services="clr-namespace:ApplicationView.Services"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
@@ -184,10 +185,12 @@
                                              ToolTip="58 = пречек, 80 = кухня"/>
                                     <TextBlock Text="мм" VerticalAlignment="Center" Foreground="#666" Margin="3,0,8,0" />
                                     <TextBlock Text="Шрифт:" VerticalAlignment="Center" Foreground="#666" Margin="0,0,4,0"
-                                               ToolTip="Размер шрифта всего чека (1–3) для встроенной формы"/>
-                                    <TextBox Text="{Binding DefaultFontSize, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
-                                             Width="28" Height="22" VerticalContentAlignment="Center" HorizontalContentAlignment="Center"
-                                             ToolTip="1 = обычный, 2 = крупнее, 3 = самый крупный (на весь чек)"/>
+                                               ToolTip="Семейство шрифта всего чека (FontFamily)"/>
+                                    <ComboBox Width="140" Height="22"
+                                              ItemsSource="{x:Static services:FontCatalog.Families}"
+                                              SelectedItem="{Binding DefaultFontFamily, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                              IsEditable="True"
+                                              ToolTip="FontFamily для всего шаблона; размер 1–3 — в «Настроить поля»"/>
                                 </StackPanel>
                             </DataTemplate>
                         </ListBox.ItemTemplate>

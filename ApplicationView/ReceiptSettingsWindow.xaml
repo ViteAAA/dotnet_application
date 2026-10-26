@@ -1,4 +1,5 @@
 ﻿<Window x:Class="ApplicationView.ReceiptSettingsWindow"
+        xmlns:services="clr-namespace:ApplicationView.Services"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
@@ -29,14 +30,14 @@
 
                 <!-- Выбор принтера -->
                 <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
-                    <TextBlock Text="Шрифт всего шаблона:" Foreground="#ECF0F1" FontSize="12"
+                    <TextBlock Text="Шрифт шаблона:" Foreground="#ECF0F1" FontSize="12"
                                VerticalAlignment="Center" Margin="0,0,6,0"
-                               ToolTip="1–3: применяется ко всем строкам шаблона"/>
-                    <ComboBox Name="CmbGlobalFont" Width="48" Height="28" Margin="0,0,14,0"
+                               ToolTip="FontFamily на весь шаблон; размер 1–3 — у каждой строки ниже"/>
+                    <ComboBox Name="CmbFontFamily" Width="150" Height="28" Margin="0,0,14,0"
                               VerticalContentAlignment="Center"
-                              ItemsSource="{Binding GlobalFontSizes}"
-                              SelectedItem="{Binding GlobalFontSize, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
-                              SelectionChanged="CmbGlobalFont_SelectionChanged"/>
+                              IsEditable="True"
+                              ItemsSource="{x:Static services:FontCatalog.Families}"
+                              SelectedItem="{Binding SelectedFontFamily, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"/>
                     <TextBlock Text="🖨️ Принтер:" Foreground="#ECF0F1" FontSize="13" 
                                VerticalAlignment="Center" Margin="0,0,8,0" FontWeight="SemiBold"/>
                     <ComboBox Name="CmbPrinters" Width="200" Height="28" 

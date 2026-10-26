@@ -43,7 +43,7 @@ public static class ProcessingData
     /// Загружает сохранённый шаблон принтера.
     /// Если файла нет — пустой список: PrintingService тогда печатает
     /// встроенную форму по ширине ленты (≤60 мм накладная/пречек, >60 мм кухня).
-    /// Порядок полей, FontSize (1–3) и IsBold применяются только к сохранённому CustomTemplate.
+    /// Порядок полей, FontSize (1–3) и IsBold — в CustomTemplate; FontFamily шаблона — отдельно на весь чек.
     /// </summary>
     public static List<ReceiptField> LoadTemplate(string printerName)
     {
@@ -73,6 +73,35 @@ public static class ProcessingData
         var filePath = GetTemplatePath(printerName);
         var json = JsonSerializer.Serialize(fields, JsonOptions);
         File.WriteAllText(filePath, json);
+    }
+
+    public static string LoadTemplateFontFamily(string printerName)
+    {
+        var path = GetTemplateFontFamilyPath(printerName);
+        if (!File.Exists(path))
+            return "Courier New";
+        try
+        {
+            var value = File.ReadAllText(path).Trim();
+            return string.IsNullOrWhiteSpace(value) ? "Courier New" : value;
+        }
+        catch
+        {
+            return "Courier New";
+        }
+    }
+
+    public static void SaveTemplateFontFamily(string printerName, string fontFamily)
+    {
+        var path = GetTemplateFontFamilyPath(printerName);
+        Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+        File.WriteAllText(path, string.IsNullOrWhiteSpace(fontFamily) ? "Courier New" : fontFamily.Trim());
+    }
+
+    private static string GetTemplateFontFamilyPath(string printerName)
+    {
+        var safe = string.Join("_", printerName.Split(Path.GetInvalidFileNameChars()));
+        return Path.Combine(TemplatesFolder, $"{safe}.fontfamily.txt");
     }
 
     public static List<ReceiptField> GetDefaultInvoiceTemplate()
