@@ -10,12 +10,12 @@ public interface IPrintDocumentBuilder
     /// <summary>
     /// Формирует байтовый буфер ESC/POS для накладной (Invoice)
     /// </summary>
-    byte[] BuildInvoiceEscPos(Slip slip, float widthMm, PrinterTextProfile profile);
+    byte[] BuildInvoiceEscPos(Slip slip, float widthMm, PrinterTextProfile profile, int baseFontSize = 1);
 
     /// <summary>
     /// Формирует байтовый буфер ESC/POS для сервисного кухонного чека (Kitchen Slip)
     /// </summary>
-    byte[] BuildKitchenSlipEscPos(Slip slip, float widthMm, PrinterTextProfile profile);
+    byte[] BuildKitchenSlipEscPos(Slip slip, float widthMm, PrinterTextProfile profile, int baseFontSize = 1);
 
     /// <summary>
     /// Формирует байтовый буфер ESC/POS по динамическому набору полей (ReceiptField)
@@ -30,7 +30,7 @@ public interface IPrintDocumentBuilder
     /// <summary>
     /// Универсальный метод построения печатной формы
     /// </summary>
-    PrintFormResult BuildForm(PrintFormType formType, Slip slip, float widthMm, PrinterTextProfile profile, IReadOnlyList<ReceiptField>? templateFields = null);
+    PrintFormResult BuildForm(PrintFormType formType, Slip slip, float widthMm, PrinterTextProfile profile, IReadOnlyList<ReceiptField>? templateFields = null, int baseFontSize = 1);
 
     /// <summary>
     /// Определяет профиль кодировки и страницы символов по имени принтера

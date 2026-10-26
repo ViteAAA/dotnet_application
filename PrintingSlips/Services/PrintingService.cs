@@ -38,7 +38,7 @@ public class PrintingService : IXPrintingService
         // ТЗ: принтер 1 (~58 мм) = пречек/накладная; принтер 2 (~80 мм) = кухня.
         // Сохранённый шаблон (CustomTemplate) перекрывает встроенные формы.
         // Пустой шаблон → выбор по PaperWidthMm: ≤60 Invoice, >60 Kitchen.
-        // FontSize/порядок строк из настроек чека действуют только в CustomTemplate.
+        // FontSize полей — в CustomTemplate; DefaultFontSize принтера — для Invoice/Kitchen.
         var formType = fields is { Count: > 0 }
             ? PrintFormType.CustomTemplate
             : width > 60
@@ -48,8 +48,8 @@ public class PrintingService : IXPrintingService
         // Автоматически экспортируем PDF для этой формы
         ExportPdfPreview(slip, formType, width, fields);
 
-        // Формируем ESC/POS байты через отдельный класс-строитель
-        var result = _documentBuilder.BuildForm(formType, slip, width, profile, fields);
+        var baseFont = Math.Clamp(printer.BaseFontSize, 1, 3);
+        var result = _documentBuilder.BuildForm(formType, slip, width, profile, fields, baseFont);
 
         // Отправляем байты на оборудование
         return await SendToDestinationAsync(printer, result.EscPosBytes, $"Slip_{slip.OrderId}");

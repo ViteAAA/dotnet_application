@@ -180,8 +180,14 @@
                                              VerticalContentAlignment="Center" HorizontalContentAlignment="Center"/>
                                     <TextBlock Text="Ширина:" VerticalAlignment="Center" Foreground="#666" Margin="0,0,4,0" />
                                     <TextBox Text="{Binding PaperWidthMm, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
-                                             Width="40" Height="22" VerticalContentAlignment="Center" HorizontalContentAlignment="Center" />
-                                    <TextBlock Text="мм" VerticalAlignment="Center" Foreground="#666" Margin="3,0,0,0" />
+                                             Width="40" Height="22" VerticalContentAlignment="Center" HorizontalContentAlignment="Center"
+                                             ToolTip="58 = пречек, 80 = кухня"/>
+                                    <TextBlock Text="мм" VerticalAlignment="Center" Foreground="#666" Margin="3,0,8,0" />
+                                    <TextBlock Text="Шрифт:" VerticalAlignment="Center" Foreground="#666" Margin="0,0,4,0"
+                                               ToolTip="Размер шрифта всего чека (1–3) для встроенной формы"/>
+                                    <TextBox Text="{Binding DefaultFontSize, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                             Width="28" Height="22" VerticalContentAlignment="Center" HorizontalContentAlignment="Center"
+                                             ToolTip="1 = обычный, 2 = крупнее, 3 = самый крупный (на весь чек)"/>
                                 </StackPanel>
                             </DataTemplate>
                         </ListBox.ItemTemplate>

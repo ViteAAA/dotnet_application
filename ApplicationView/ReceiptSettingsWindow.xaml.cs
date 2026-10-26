@@ -13,6 +13,10 @@ public partial class ReceiptSettingsWindow : Window
     public List<string> InstalledPrinters { get; set; } = [];
     public string SelectedPrinter { get; set; }
     public Dictionary<string, int> PrinterWidthByName { get; } = new(StringComparer.OrdinalIgnoreCase);
+    public Dictionary<string, int> PrinterFontByName { get; } = new(StringComparer.OrdinalIgnoreCase);
+    public int[] GlobalFontSizes { get; } = [1, 2, 3];
+    public int GlobalFontSize { get; set; } = 1;
+    private bool _suppressGlobalFontApply;
 
     // Полная карта полей WooCommerce JSON
     public Dictionary<string, string> MainWooCommerceOptions { get; } = new()
@@ -77,7 +81,8 @@ public partial class ReceiptSettingsWindow : Window
     public ReceiptSettingsWindow(
         string? defaultPrinter = null,
         IEnumerable<string>? extraPrinters = null,
-        IDictionary<string, int>? printerWidths = null)
+        IDictionary<string, int>? printerWidths = null,
+        IDictionary<string, int>? printerFonts = null)
     {
         InitializeComponent();
 
@@ -104,6 +109,12 @@ public partial class ReceiptSettingsWindow : Window
                 PrinterWidthByName[pair.Key] = pair.Value;
         }
 
+        if (printerFonts != null)
+        {
+            foreach (var pair in printerFonts)
+                PrinterFontByName[pair.Key] = Math.Clamp(pair.Value, 1, 3);
+        }
+
         SelectedPrinter = defaultPrinter
                           ?? InstalledPrinters.FirstOrDefault()
                           ?? "DefaultPrinter";
@@ -123,11 +134,19 @@ public partial class ReceiptSettingsWindow : Window
         {
             var width = PrinterWidthByName.TryGetValue(printerName, out var w) ? w : 80;
             fields = ProcessingData.GetDefaultTemplateForWidth(width);
+            var seedFont = PrinterFontByName.TryGetValue(printerName, out var fs) ? fs : 1;
+            foreach (var f in fields)
+            {
+                f.FontSize = seedFont;
+                foreach (var c in f.ChildFields)
+                    c.FontSize = seedFont;
+            }
         }
 
         ReceiptFields.Clear();
         foreach (var f in fields)
             ReceiptFields.Add(f);
+        SyncGlobalFontFromFields();
     }
 
     private void CmbPrinters_SelectionChanged(object sender, System.Windows.Controls.SelectionChangedEventArgs e)
@@ -135,6 +154,46 @@ public partial class ReceiptSettingsWindow : Window
         if (!string.IsNullOrEmpty(SelectedPrinter))
         {
             LoadPrinterTemplate(SelectedPrinter);
+        }
+    }
+
+
+    private void CmbGlobalFont_SelectionChanged(object sender, System.Windows.Controls.SelectionChangedEventArgs e)
+    {
+        if (_suppressGlobalFontApply) return;
+        if (sender is System.Windows.Controls.ComboBox { SelectedItem: int size })
+            GlobalFontSize = size;
+        ApplyGlobalFontToAllFields();
+    }
+
+    /// <summary>
+    /// ТЗ: увеличить/уменьшить шрифт всего шаблона — проставляет FontSize на все строки (и вложенные поля товаров).
+    /// </summary>
+    private void ApplyGlobalFontToAllFields()
+    {
+        var size = Math.Clamp(GlobalFontSize, 1, 3);
+        foreach (var field in ReceiptFields)
+        {
+            field.FontSize = size;
+            foreach (var child in field.ChildFields)
+                child.FontSize = size;
+        }
+        LstReceiptFields?.Items?.Refresh();
+    }
+
+    private void SyncGlobalFontFromFields()
+    {
+        _suppressGlobalFontApply = true;
+        try
+        {
+            GlobalFontSize = ReceiptFields.FirstOrDefault()?.FontSize is int s && s is >= 1 and <= 3 ? s : 1;
+            // refresh binding if ComboBox already created
+            if (CmbGlobalFont != null)
+                CmbGlobalFont.SelectedItem = GlobalFontSize;
+        }
+        finally
+        {
+            _suppressGlobalFontApply = false;
         }
     }
 
@@ -146,6 +205,7 @@ public partial class ReceiptSettingsWindow : Window
             return;
         }
 
+        ApplyGlobalFontToAllFields();
         // Сохраняем шаблон именно для выбранного принтера
         ProcessingData.SaveTemplate(SelectedPrinter, ReceiptFields);
         MessageBox.Show($"Шаблон для принтера '{SelectedPrinter}' успешно сохранен!");
@@ -155,7 +215,7 @@ public partial class ReceiptSettingsWindow : Window
     private void BtnAddField_Click(object sender, RoutedEventArgs e)
     {
         Console.WriteLine("[CLICK] Add field click");
-        var newField = new ReceiptField("Заголовок", "order.number");
+        var newField = new ReceiptField("Заголовок", "order.number") { FontSize = Math.Clamp(GlobalFontSize, 1, 3) };
         ReceiptFields.Add(newField);
     }
 
@@ -190,7 +250,7 @@ public partial class ReceiptSettingsWindow : Window
     private void BtnAddSubField_Click(object sender, RoutedEventArgs e)
     {
         if (sender is FrameworkElement { DataContext: ReceiptField parentField })
-            parentField.ChildFields.Add(new ReceiptField("Параметр товара", "item.name"));
+            parentField.ChildFields.Add(new ReceiptField("Параметр товара", "item.name") { FontSize = Math.Clamp(GlobalFontSize, 1, 3) });
     }
 
     private void BtnRemoveSubField_Click(object sender, RoutedEventArgs e)
