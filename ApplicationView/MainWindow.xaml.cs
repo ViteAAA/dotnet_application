@@ -484,7 +484,8 @@ public partial class MainWindow : Window
     {
         var defaultPrinter = Printers.FirstOrDefault(p => p.IsSelected)?.Name
                              ?? Printers.FirstOrDefault()?.Name;
-        var window = new ReceiptSettingsWindow(defaultPrinter, Printers.Select(p => p.Name)) { Owner = this };
+        var widths = Printers.ToDictionary(p => p.Name, p => p.PaperWidthMm, StringComparer.OrdinalIgnoreCase);
+        var window = new ReceiptSettingsWindow(defaultPrinter, Printers.Select(p => p.Name), widths) { Owner = this };
         window.ShowDialog();
     }
 

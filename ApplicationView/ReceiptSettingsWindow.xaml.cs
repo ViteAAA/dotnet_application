@@ -12,6 +12,7 @@ public partial class ReceiptSettingsWindow : Window
     public ObservableCollection<ReceiptField> ReceiptFields { get; set; } = [];
     public List<string> InstalledPrinters { get; set; } = [];
     public string SelectedPrinter { get; set; }
+    public Dictionary<string, int> PrinterWidthByName { get; } = new(StringComparer.OrdinalIgnoreCase);
 
     // Полная карта полей WooCommerce JSON
     public Dictionary<string, string> MainWooCommerceOptions { get; } = new()
@@ -73,7 +74,10 @@ public partial class ReceiptSettingsWindow : Window
         { "item.sku", "[Товар: Артикул (SKU)]" }
     };
 
-    public ReceiptSettingsWindow(string? defaultPrinter = null, IEnumerable<string>? extraPrinters = null)
+    public ReceiptSettingsWindow(
+        string? defaultPrinter = null,
+        IEnumerable<string>? extraPrinters = null,
+        IDictionary<string, int>? printerWidths = null)
     {
         InitializeComponent();
 
@@ -94,6 +98,12 @@ public partial class ReceiptSettingsWindow : Window
             }
         }
 
+        if (printerWidths != null)
+        {
+            foreach (var pair in printerWidths)
+                PrinterWidthByName[pair.Key] = pair.Value;
+        }
+
         SelectedPrinter = defaultPrinter
                           ?? InstalledPrinters.FirstOrDefault()
                           ?? "DefaultPrinter";
@@ -107,6 +117,14 @@ public partial class ReceiptSettingsWindow : Window
     private void LoadPrinterTemplate(string printerName)
     {
         var fields = ProcessingData.LoadTemplate(printerName);
+        // Нет сохранённого файла — подставляем дефолт по ширине ленты только в редактор
+        // (печать без Save по-прежнему идёт через встроенные Invoice/Kitchen формы).
+        if (fields.Count == 0)
+        {
+            var width = PrinterWidthByName.TryGetValue(printerName, out var w) ? w : 80;
+            fields = ProcessingData.GetDefaultTemplateForWidth(width);
+        }
+
         ReceiptFields.Clear();
         foreach (var f in fields)
             ReceiptFields.Add(f);

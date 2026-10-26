@@ -39,24 +39,34 @@ public static class ProcessingData
         return Path.Combine(TemplatesFolder, $"{safeName}.json");
     }
 
+    /// <summary>
+    /// Загружает сохранённый шаблон принтера.
+    /// Если файла нет — пустой список: PrintingService тогда печатает
+    /// встроенную форму по ширине ленты (≤60 мм накладная/пречек, >60 мм кухня).
+    /// Порядок полей, FontSize (1–3) и IsBold применяются только к сохранённому CustomTemplate.
+    /// </summary>
     public static List<ReceiptField> LoadTemplate(string printerName)
     {
         var filePath = GetTemplatePath(printerName);
         if (!File.Exists(filePath))
-        {
-            return GetDefaultTemplate();
-        }
+            return [];
 
         try
         {
             var json = File.ReadAllText(filePath);
-            return JsonSerializer.Deserialize<List<ReceiptField>>(json) ?? GetDefaultTemplate();
+            return JsonSerializer.Deserialize<List<ReceiptField>>(json) ?? [];
         }
         catch
         {
-            return GetDefaultTemplate();
+            return [];
         }
     }
+
+    /// <summary>
+    /// Дефолт для редактора настроек: 58 мм → пречек/накладная, 80 мм → кухня.
+    /// </summary>
+    public static List<ReceiptField> GetDefaultTemplateForWidth(int widthMm) =>
+        widthMm <= 60 ? GetDefaultInvoiceTemplate() : GetDefaultKitchenTemplate();
 
     public static void SaveTemplate(string printerName, IEnumerable<ReceiptField> fields)
     {
@@ -65,30 +75,31 @@ public static class ProcessingData
         File.WriteAllText(filePath, json);
     }
 
-    private static List<ReceiptField> GetDefaultTemplate()
+    public static List<ReceiptField> GetDefaultInvoiceTemplate()
     {
+        // Пречек / накладная (XP-58 / ~58 мм). Подписи RU+EN — для ТЗ «в одном чеке».
         return
         [
             new ReceiptField("", "order.seller_title"),
             new ReceiptField("", "order.seller_name"),
             new ReceiptField("ИНН", "order.seller_inn"),
-            new ReceiptField("НАКЛАДНАЯ", "static.text", "НАКЛАДНАЯ", isItemContainer: false)
+            new ReceiptField("НАКЛАДНАЯ / INVOICE", "static.text", "НАКЛАДНАЯ / INVOICE", isItemContainer: false)
             {
                 IsBold = true,
                 FontSize = 2
             },
-            new ReceiptField("Заказ №", "order.number") { IsBold = true, FontSize = 2 },
-            new ReceiptField("Грузоотправитель", "order.seller_title"),
-            new ReceiptField("Грузополучатель", "shipping.first_name"),
+            new ReceiptField("Заказ № / Order #", "order.number") { IsBold = true, FontSize = 2 },
+            new ReceiptField("Грузоотправитель / Shipper", "order.seller_title"),
+            new ReceiptField("Грузополучатель / Consignee", "shipping.first_name"),
             new ReceiptField("Фамилия получателя", "shipping.last_name"),
-            new ReceiptField("Адрес доставки", "shipping.address_1"),
-            new ReceiptField("Телефон", "billing.phone"),
-            new ReceiptField("Менеджер", "order.manager"),
-            new ReceiptField("Заказ принят", "order.date_created"),
-            new ReceiptField("Накладная оформлена", "order.date_created"),
-            new ReceiptField("Время доставки", "order.delivery_time"),
-            new ReceiptField("Заказ доставлен", "order.delivered_at"),
-            new ReceiptField("Количество человек", "order.persons"),
+            new ReceiptField("Адрес / Address", "shipping.address_1"),
+            new ReceiptField("Телефон / Phone", "billing.phone"),
+            new ReceiptField("Менеджер / Manager", "order.manager"),
+            new ReceiptField("Заказ принят / Accepted", "order.date_created"),
+            new ReceiptField("Накладная оформлена / Issued", "order.date_created"),
+            new ReceiptField("Время доставки / Deliver by", "order.delivery_time"),
+            new ReceiptField("Заказ доставлен / Delivered", "order.delivered_at"),
+            new ReceiptField("Кол-во человек / Persons", "order.persons"),
             new ReceiptField("Список товаров", "block.items")
             {
                 ChildFields = new ObservableCollection<ReceiptField>
@@ -99,22 +110,53 @@ public static class ProcessingData
                     new ReceiptField("Сумма", "item.total")
                 }
             },
-            new ReceiptField("Итого к оплате", "order.total") { IsBold = true },
-            new ReceiptField("Способ оплаты", "order.payment_method_title"),
-            new ReceiptField("Количество персон", "order.persons"),
-            new ReceiptField("Канал продаж", "order.sales_channel"),
-            new ReceiptField("Номер заказа FN", "order.number"),
+            new ReceiptField("Итого / Total", "order.total") { IsBold = true },
+            new ReceiptField("Оплата / Payment", "order.payment_method_title"),
+            new ReceiptField("Персон / Persons", "order.persons"),
+            new ReceiptField("Канал / Channel", "order.sales_channel"),
+            new ReceiptField("FN / Order FN", "order.number"),
             new ReceiptField("", "order.sign_released"),
             new ReceiptField("", "order.sign_received"),
-            new ReceiptField("Комментарий к заказу", "order.customer_note"),
-            new ReceiptField("Доставка", "order.delivery_type") { IsBold = true, FontSize = 2 },
+            new ReceiptField("Комментарий / Note", "order.customer_note"),
+            new ReceiptField("Доставка / Delivery", "order.delivery_type") { IsBold = true, FontSize = 2 },
             new ReceiptField("Код доставки", "order.delivery_code"),
             new ReceiptField("", "order.currency_note"),
             new ReceiptField("", "order.footer")
         ];
     }
 
+
+    /// <summary>
+    /// Кухонный чек по умолчанию (XP-80 / ~80 мм): время, тип доставки, позиции, адрес, оплата.
+    /// </summary>
+    public static List<ReceiptField> GetDefaultKitchenTemplate()
+    {
+        return
+        [
+            new ReceiptField("", "order.delivery_time") { IsBold = true, FontSize = 3 },
+            new ReceiptField("Доставка / Delivery", "order.delivery_type") { IsBold = true, FontSize = 2 },
+            new ReceiptField("ЗАКАЗ № / ORDER #", "order.number") { IsBold = true, FontSize = 2 },
+            new ReceiptField("Оформлен / Placed", "order.date_created"),
+            new ReceiptField("Доставить к / Deliver by", "order.delivery_time"),
+            new ReceiptField("Позиции / Items", "block.items")
+            {
+                ChildFields = new ObservableCollection<ReceiptField>
+                {
+                    new ReceiptField("Название / Name", "item.name"),
+                    new ReceiptField("Кол-во / Qty", "item.quantity")
+                }
+            },
+            new ReceiptField("Адрес / Address", "shipping.address_1"),
+            new ReceiptField("Ком. к заказу / Note", "order.customer_note"),
+            new ReceiptField("Оплата / Payment", "order.payment_method_title"),
+            new ReceiptField("Персон / Persons", "order.persons"),
+            new ReceiptField("Канал / Channel", "order.sales_channel"),
+            new ReceiptField("FN", "order.number")
+        ];
+    }
+
     // --- РАБОТА СО СПИСКОМ WOOCOMMERCE-САЙТОВ ---
+
 
     public static List<WooCommerceSite> LoadSites()
     {

@@ -100,8 +100,8 @@ public class PrintDocumentBuilder : IPrintDocumentBuilder
         bytes.AddRange(EscAlignCenter);
         bytes.AddRange(GetFontSizeCommand(2)); // Увеличенный шрифт (примерно FontSize 10 в QuestPDF)
         bytes.AddRange(EscBoldOn);
-        bytes.AddRange(encoding.GetBytes("НАКЛАДНАЯ\n"));
-        bytes.AddRange(encoding.GetBytes($"Заказ № {slip.OrderId}\n\n"));
+        bytes.AddRange(encoding.GetBytes("НАКЛАДНАЯ / INVOICE\n"));
+        bytes.AddRange(encoding.GetBytes($"Заказ № / Order # {slip.OrderId}\n\n"));
         bytes.AddRange(EscBoldOff);
         bytes.AddRange(GetFontSizeCommand(1));
 
@@ -216,83 +216,98 @@ public class PrintDocumentBuilder : IPrintDocumentBuilder
         var bytes = new List<byte>();
         var charsPerLine = GetCharsPerLine(widthMm);
         var encoding = profile.Encoding;
-        var currentTime = DateTime.Now.ToString("HH:mm");
-        var orderTime = slip.OrderDate?.ToString("HH:mm") ?? currentTime;
+        var orderTime = slip.OrderDate?.ToString("HH:mm") ?? DateTime.Now.ToString("HH:mm");
+        // Крупное время сверху — «доставить к», как на образцах iiko; иначе время оформления.
+        var headlineTime = ExtractClock(slip.DeliveryTime) ?? orderTime;
 
         AddInitialization(bytes, profile);
 
-        // Разделитель
         AddSeparator(bytes, encoding, charsPerLine);
 
-        // Время (по центру, жирным)
         bytes.AddRange(EscAlignCenter);
         bytes.AddRange(EscBoldOn);
-        AddWrappedLine(bytes, encoding, currentTime, charsPerLine);
+        bytes.AddRange(GetFontSizeCommand(3));
+        AddWrappedLine(bytes, encoding, headlineTime, charsPerLine);
+        bytes.AddRange(GetFontSizeCommand(1));
         bytes.AddRange(EscBoldOff);
 
-        // Разделитель
         AddSeparator(bytes, encoding, charsPerLine);
 
-        // Тип доставки и № заказа (по центру, жирным)
         bytes.AddRange(EscAlignCenter);
         bytes.AddRange(EscBoldOn);
-        AddWrappedLine(bytes, encoding, slip.DeliveryType ?? "ДОСТАВКА", charsPerLine);
-        AddWrappedLine(bytes, encoding, $"ЗАКАЗ № {slip.OrderId}", charsPerLine);
+        bytes.AddRange(GetFontSizeCommand(2));
+        AddWrappedLine(bytes, encoding, slip.DeliveryType ?? "Доставка / Delivery", charsPerLine);
+        AddWrappedLine(bytes, encoding, $"ЗАКАЗ № / ORDER # {slip.OrderId}", charsPerLine);
         bytes.AddRange(EscBoldOff);
+        bytes.AddRange(GetFontSizeCommand(1));
 
-        // Время оформления и доставки (по левому краю)
         bytes.AddRange(EscAlignLeft);
-        AddWrappedLine(bytes, encoding, $"Оформлен: {orderTime}", charsPerLine);
+        AddWrappedLine(bytes, encoding, $"Оформлен / Placed: {orderTime}", charsPerLine);
         if (!string.IsNullOrWhiteSpace(slip.DeliveryTime))
-            AddWrappedLine(bytes, encoding, $"Доставить к: {slip.DeliveryTime}", charsPerLine);
+            AddWrappedLine(bytes, encoding, $"Доставить к / Deliver by: {slip.DeliveryTime}", charsPerLine);
 
-        // Разделитель и шапка таблицы товаров
         AddSeparator(bytes, encoding, charsPerLine);
-        
-        string title = "Название";
+
+        string title = "Название / Name";
         string qtyTitle = "Кол-во";
         string headerLine = title.Length + qtyTitle.Length < charsPerLine
             ? title + new string(' ', charsPerLine - title.Length - qtyTitle.Length) + qtyTitle
             : title + " " + qtyTitle;
         AddWrappedLine(bytes, encoding, headerLine, charsPerLine);
 
-        // Список товаров
         foreach (var item in slip.Items)
         {
             AddSeparator(bytes, encoding, charsPerLine);
-            
-            var itemName = item.Name ?? "Товар";
+
+            var itemName = item.Name ?? "Товар / Item";
             var itemQty = $"{item.Quantity ?? 1}";
             string itemLine = itemName.Length + itemQty.Length < charsPerLine
                 ? itemName + new string(' ', charsPerLine - itemName.Length - itemQty.Length) + itemQty
                 : itemName + " " + itemQty;
-                
+
             AddWrappedLine(bytes, encoding, itemLine, charsPerLine);
         }
 
-        // Финальный разделитель и детальная информация (мелким шрифтом / блоком)
         AddSeparator(bytes, encoding, charsPerLine);
-        
-        AddWrappedLine(bytes, encoding, $"Адрес: {slip.ShippingAddress ?? slip.BillingAddress1 ?? "Не указан"}", charsPerLine);
-        
+
+        // Самовывоз: адрес можно скрыть; для доставки — как на образцах.
+        var address = slip.ShippingAddress ?? slip.BillingAddress1;
+        if (!string.IsNullOrWhiteSpace(address))
+            AddWrappedLine(bytes, encoding, $"Адрес / Address: {address}", charsPerLine);
+
         if (!string.IsNullOrWhiteSpace(slip.CustomerNote))
-            AddWrappedLine(bytes, encoding, $"Ком. к заказу: {slip.CustomerNote}", charsPerLine);
+            AddWrappedLine(bytes, encoding, $"Ком. к заказу / Note: {slip.CustomerNote}", charsPerLine);
 
-        AddWrappedLine(bytes, encoding, $"Способ оплаты: {slip.PaymentMethod ?? "Не указана"}", charsPerLine);
-        
-        var recipient = !string.IsNullOrWhiteSpace(slip.CustomerName) ? slip.CustomerName : "Покупатель";
-        AddWrappedLine(bytes, encoding, $"Получатель: {recipient}", charsPerLine);
-        
-        if (!string.IsNullOrWhiteSpace(slip.CustomerPhone))
-            AddWrappedLine(bytes, encoding, $"Телефон: {slip.CustomerPhone}", charsPerLine);
-
-        AddWrappedLine(bytes, encoding, $"Канал продаж: {slip.SalesChannel}", charsPerLine);
-        AddWrappedLine(bytes, encoding, $"Номер заказа FN: {slip.OrderId}", charsPerLine);
+        AddWrappedLine(bytes, encoding, $"Оплата / Payment: {slip.PaymentMethod ?? "—"}", charsPerLine);
+        AddWrappedLine(bytes, encoding, $"Персон / Persons: {slip.PersonsCount ?? "1"}", charsPerLine);
+        AddWrappedLine(bytes, encoding, $"Канал / Channel: {slip.SalesChannel}", charsPerLine);
+        AddWrappedLine(bytes, encoding, $"FN: {slip.OrderId}", charsPerLine);
 
         bytes.AddRange(encoding.GetBytes("\n\n\n"));
         bytes.AddRange(EscCutPaper);
 
         return [.. bytes];
+    }
+
+    private static string? ExtractClock(string? deliveryTime)
+    {
+        if (string.IsNullOrWhiteSpace(deliveryTime))
+            return null;
+
+        // Ищем HH:mm в строке вида "10.09 13:42" или "13:42".
+        for (var i = 0; i + 4 < deliveryTime.Length; i++)
+        {
+            if (char.IsDigit(deliveryTime[i]) &&
+                char.IsDigit(deliveryTime[i + 1]) &&
+                deliveryTime[i + 2] == ':' &&
+                char.IsDigit(deliveryTime[i + 3]) &&
+                char.IsDigit(deliveryTime[i + 4]))
+            {
+                return deliveryTime.Substring(i, 5);
+            }
+        }
+
+        return null;
     }
 
     #endregion

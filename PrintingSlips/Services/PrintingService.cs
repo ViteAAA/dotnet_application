@@ -35,7 +35,10 @@ public class PrintingService : IXPrintingService
         var profile = _documentBuilder.ResolvePrinterProfile(printer.Name);
         var fields = _templateProvider?.GetTemplateForPrinter(printer.Name);
 
-        // Определяем форму: шаблонная, кухонная (>60мм) или накладная (<=60мм)
+        // ТЗ: принтер 1 (~58 мм) = пречек/накладная; принтер 2 (~80 мм) = кухня.
+        // Сохранённый шаблон (CustomTemplate) перекрывает встроенные формы.
+        // Пустой шаблон → выбор по PaperWidthMm: ≤60 Invoice, >60 Kitchen.
+        // FontSize/порядок строк из настроек чека действуют только в CustomTemplate.
         var formType = fields is { Count: > 0 }
             ? PrintFormType.CustomTemplate
             : width > 60
