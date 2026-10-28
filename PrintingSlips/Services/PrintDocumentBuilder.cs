@@ -9,7 +9,7 @@ namespace PrintingSlips.Services;
 /// Инкапсулирует форматирование накладных, кухонных чеков, шаблонов и тестовых страниц,
 /// освобождая PrintingService от логики верстки документов.
 /// </summary>
-public class PrintDocumentBuilder : IPrintDocumentBuilder
+public partial class PrintDocumentBuilder : IPrintDocumentBuilder
 {
     // Стандартные управляющие ESC/POS байты
     private static readonly byte[] EscInitialize = [0x1B, 0x40];

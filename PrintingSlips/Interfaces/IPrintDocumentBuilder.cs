@@ -41,4 +41,9 @@ public interface IPrintDocumentBuilder
     /// Возвращает число символов в строке для заданной ширины ленты (32 для 58мм, 48 для 80мм)
     /// </summary>
     int GetCharsPerLine(float widthMm);
+
+    /// <summary>
+    /// Строит текстовые строки формы для печати через очередь Windows (GDI, драйвер принтера)
+    /// </summary>
+    IReadOnlyList<PrintTextLine> BuildFormLines(PrintFormType formType, Slip slip, float widthMm, IReadOnlyList<ReceiptField>? templateFields = null);
 }

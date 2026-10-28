@@ -6,9 +6,11 @@ using PrintingSlips.Models;
 namespace PrintingSlips.Services;
 
 /// <summary>
-/// Отрефакторенный сервис печати. Отвечает ТОЛЬКО за маршрутизацию и отправку байтов
-/// на принтер (WinAPI Spooler / TCP Socket) и сохранение PDF, делегируя верстку форм
-/// строителю IPrintDocumentBuilder и экспортеру IPdfSlipExporter.
+/// Сервис печати. Активный путь — очередь печати Windows (GDI, PrintDocument) по имени
+/// принтера (PrinterDestination.Name) для любых ConnectionType (USB / Windows / Network-IP):
+/// так применяются настройки драйвера XPrinter и шрифт PrinterDestination.FontFamily.
+/// Host/Port для отправки данных не используются. ESC/POS-методы (RAW/TCP) оставлены
+/// как неиспользуемый запасной код.
 /// </summary>
 public class PrintingService : IXPrintingService
 {
@@ -32,7 +34,6 @@ public class PrintingService : IXPrintingService
     public async Task<bool> PrintSlipAsync(Slip slip, PrinterDestination printer)
     {
         var width = printer.WidthMm > 0 ? printer.WidthMm : 80;
-        var profile = _documentBuilder.ResolvePrinterProfile(printer.Name);
         var fields = _templateProvider?.GetTemplateForPrinter(printer.Name);
 
         // ТЗ: принтер 1 (~58 мм) = пречек/накладная; принтер 2 (~80 мм) = кухня.
@@ -48,10 +49,9 @@ public class PrintingService : IXPrintingService
         var fontFamily = string.IsNullOrWhiteSpace(printer.FontFamily) ? "Courier New" : printer.FontFamily;
         ExportPdfPreview(slip, formType, width, fields, fontFamily);
 
-        var result = _documentBuilder.BuildForm(formType, slip, width, profile, fields);
-
-        // Отправляем байты на оборудование
-        return await SendToDestinationAsync(printer, result.EscPosBytes, $"Slip_{slip.OrderId}");
+        // Активный путь: очередь Windows / GDI (драйвер + шрифт), не RAW ESC/POS.
+        var lines = _documentBuilder.BuildFormLines(formType, slip, width, fields);
+        return await PrintViaQueueAsync(printer, lines, fontFamily, width, $"Slip_{slip.OrderId}");
     }
 
     /// <summary>
@@ -60,8 +60,6 @@ public class PrintingService : IXPrintingService
     public async Task<bool> PrintTestPageAsync(PrinterDestination printer)
     {
         var width = printer.WidthMm > 0 ? printer.WidthMm : 80;
-        var profile = _documentBuilder.ResolvePrinterProfile(printer.Name);
-
         // Экспорт PDF копии теста
         try
         {
@@ -74,10 +72,9 @@ public class PrintingService : IXPrintingService
             Console.WriteLine($"[PDF Test] Ошибка сохранения: {ex.Message}");
         }
 
-        // Формируем ESC/POS байты тестовой страницы
-        var buffer = _documentBuilder.BuildTestPageEscPos(width, profile);
-
-        return await SendToDestinationAsync(printer, buffer, "Printer_Test");
+        var fontFamily = string.IsNullOrWhiteSpace(printer.FontFamily) ? "Courier New" : printer.FontFamily;
+        var lines = _documentBuilder.BuildFormLines(PrintFormType.TestPage, null!, width); // TestPage не использует Slip
+        return await PrintViaQueueAsync(printer, lines, fontFamily, width, "Printer_Test");
     }
 
     /// <summary>
@@ -106,6 +103,21 @@ public class PrintingService : IXPrintingService
             Console.WriteLine($"[PDF] Ошибка создания preview: {ex.Message}");
         }
     }
+
+    private static Task<bool> PrintViaQueueAsync(PrinterDestination printer, IReadOnlyList<PrintTextLine> lines,
+        string fontFamily, float width, string documentName)
+    {
+        if (string.IsNullOrWhiteSpace(printer.Name))
+            throw new Exception("Не указано имя принтера Windows (очередь печати). Для IP-принтера установите его в Windows и выберите очередь.");
+
+        return Task.Run(() =>
+        {
+            WindowsQueuePrinter.Print(printer.Name, lines, fontFamily, width, documentName);
+            return true;
+        });
+    }
+
+    // ===== Запасной (неактивный) путь ESC/POS: RAW-спулер / TCP. Не используется — активна печать через очередь/GDI. =====
 
     private async Task<bool> SendToDestinationAsync(PrinterDestination printer, byte[] buffer, string documentName)
     {
