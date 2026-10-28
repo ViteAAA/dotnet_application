@@ -24,6 +24,19 @@ public class ReceiptField
     public bool IsBold { get; set; }
 
     /// <summary>
+    /// Горизонтальное выравнивание поля: "Left", "Center", "Right". По умолчанию "Left"
+    /// (старые шаблоны без этого свойства загружаются с выравниванием слева).
+    /// </summary>
+    public string Align { get; set; } = "Left";
+
+    public PrintTextAlign GetPrintAlign() => (Align ?? string.Empty).Trim().ToLowerInvariant() switch
+    {
+        "center" => PrintTextAlign.Center,
+        "right" => PrintTextAlign.Right,
+        _ => PrintTextAlign.Left
+    };
+
+    /// <summary>
     /// Флаг, указывающий, что данное поле является контейнером/блоком для списка товаров
     /// </summary>
     public bool IsItemContainer { get; set; } = false;

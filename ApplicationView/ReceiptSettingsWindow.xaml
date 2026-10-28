@@ -102,6 +102,13 @@
                                              Text="{Binding FontSize, UpdateSourceTrigger=PropertyChanged}" />
                                     <CheckBox Content="Жирный" VerticalAlignment="Center"
                                               IsChecked="{Binding IsBold, UpdateSourceTrigger=PropertyChanged}" />
+                                    <TextBlock Text="Выравнивание:" VerticalAlignment="Center" FontSize="11" Foreground="#7F8C8D" Margin="12,0,0,0" />
+                                    <ComboBox Width="100" Height="24" Margin="6,0,0,0" SelectedValuePath="Tag"
+                                              SelectedValue="{Binding Align, UpdateSourceTrigger=PropertyChanged}" ToolTip="Выравнивание">
+                                        <ComboBoxItem Content="Слева" Tag="Left" />
+                                        <ComboBoxItem Content="По центру" Tag="Center" />
+                                        <ComboBoxItem Content="Справа" Tag="Right" />
+                                    </ComboBox>
                                 </StackPanel>
 
                                 <StackPanel Orientation="Horizontal" Margin="25,6,0,0">
@@ -146,6 +153,8 @@
                                                             <ColumnDefinition Width="*" />
                                                             <ColumnDefinition Width="200" />
                                                             <ColumnDefinition Width="Auto" />
+                                                            <ColumnDefinition Width="Auto" />
+                                                            <ColumnDefinition Width="Auto" />
                                                         </Grid.ColumnDefinitions>
 
                                                         <TextBox Grid.Column="0" Height="24" Margin="0,0,5,0"
@@ -161,6 +170,12 @@
                                                                 Click="BtnRemoveSubField_Click" Background="Transparent" BorderThickness="0" />
                                                         <TextBox Grid.Column="3" Width="35" Height="24" Margin="5,0,0,0"
                                                              Text="{Binding FontSize, UpdateSourceTrigger=PropertyChanged}" />
+                                                        <ComboBox Grid.Column="4" Width="90" Height="24" Margin="5,0,0,0" SelectedValuePath="Tag"
+                                                                  SelectedValue="{Binding Align, UpdateSourceTrigger=PropertyChanged}" ToolTip="Выравнивание">
+                                                            <ComboBoxItem Content="Слева" Tag="Left" />
+                                                            <ComboBoxItem Content="По центру" Tag="Center" />
+                                                            <ComboBoxItem Content="Справа" Tag="Right" />
+                                                        </ComboBox>
                                                     </Grid>
                                                 </DataTemplate>
                                             </ItemsControl.ItemTemplate>

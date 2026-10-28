@@ -147,7 +147,7 @@ public partial class PrintDocumentBuilder
         foreach (var line in BuildTemplateLines(slip, fields))
         {
             var text = string.IsNullOrWhiteSpace(line.Label) ? line.Value : $"{line.Label}: {line.Value}";
-            AddLine(l, text, Math.Clamp(line.Field.FontSize, 1, 3), line.Field.IsBold);
+            AddLine(l, text, Math.Clamp(line.Field.FontSize, 1, 3), line.Field.IsBold, line.Field.GetPrintAlign());
         }
         return l;
     }

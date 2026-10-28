@@ -323,7 +323,12 @@ public partial class PrintDocumentBuilder : IPrintDocumentBuilder
         AddInitialization(bytes, profile);
         foreach (var line in BuildTemplateLines(slip, fields))
         {
-            bytes.AddRange(EscAlignLeft);
+            bytes.AddRange(line.Field.GetPrintAlign() switch
+            {
+                PrintTextAlign.Center => EscAlignCenter,
+                PrintTextAlign.Right => EscAlignRight,
+                _ => EscAlignLeft
+            });
             bytes.AddRange(GetFontSizeCommand(line.Field.FontSize));
             bytes.AddRange(line.Field.IsBold ? EscBoldOn : EscBoldOff);
 

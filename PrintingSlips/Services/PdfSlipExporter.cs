@@ -333,7 +333,14 @@ public class PdfSlipExporter : IPdfSlipExporter
                             _ => baseSize
                         };
 
-                        var item = col.Item().Text(text).FontSize(fontSize);
+                        var cell = col.Item();
+                        cell = line.Field.GetPrintAlign() switch
+                        {
+                            PrintTextAlign.Center => cell.AlignCenter(),
+                            PrintTextAlign.Right => cell.AlignRight(),
+                            _ => cell.AlignLeft()
+                        };
+                        var item = cell.Text(text).FontSize(fontSize);
                         if (line.Field.IsBold)
                             item.Bold();
                     }
