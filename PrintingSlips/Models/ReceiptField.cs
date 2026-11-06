@@ -9,6 +9,57 @@ public class ReceiptField
     /// </summary>
     public string Name { get; set; } = string.Empty;
 
+    public string GetEffectiveName() =>
+        string.IsNullOrWhiteSpace(Name) ? GetDefaultName(Key) : Name;
+
+    public static string GetDefaultName(string? key) => (key ?? string.Empty).Trim().ToLowerInvariant() switch
+    {
+        "order.number" => "Заказ №",
+        "order.status" => "Статус заказа",
+        "order.date_created" => "Дата создания",
+        "order.time_created" => "Время заказа",
+        "order.payment_method_title" => "Способ оплаты",
+        "order.customer_note" => "Примечание покупателя",
+        "order.currency" => "Валюта",
+        "billing.first_name" => "Имя покупателя",
+        "billing.last_name" => "Фамилия покупателя",
+        "billing.phone" => "Телефон",
+        "billing.email" => "Email",
+        "billing.city" => "Город оплаты",
+        "billing.address_1" => "Адрес оплаты",
+        "billing.postcode" => "Почтовый индекс",
+        "shipping.first_name" => "Имя получателя",
+        "shipping.last_name" => "Фамилия получателя",
+        "shipping.city" => "Город доставки",
+        "shipping.address_1" => "Адрес доставки",
+        "order.total" => "Итоговая сумма",
+        "order.shipping_total" => "Стоимость доставки",
+        "order.discount_total" => "Скидка",
+        "order.shipping_method" => "Способ доставки",
+        "order.delivery_type" => "Тип доставки",
+        "order.delivery_time" => "Время доставки",
+        "order.delivered_at" => "Заказ доставлен",
+        "order.persons" => "Количество персон",
+        "order.manager" => "Менеджер",
+        "order.seller_title" => "Реквизиты продавца",
+        "order.seller_name" => "ФИО продавца",
+        "order.seller_inn" => "ИНН продавца",
+        "order.delivery_code" => "Код доставки",
+        "order.sales_channel" => "Канал продаж",
+        "order.sign_released" => "Груз сдал",
+        "order.sign_received" => "Груз принял",
+        "order.footer" => "Подвал чека",
+        "block.items" => "Список товаров",
+        "static.text" => "Текст",
+        "item.name" => "Наименование",
+        "item.quantity" => "Кол-во",
+        "item.price" => "Цена",
+        "item.subtotal" => "Промежуточная сумма",
+        "item.total" => "Сумма",
+        "item.sku" => "Артикул",
+        _ => key ?? string.Empty
+    };
+
     /// <summary>
     /// Системный путь/ключ из JSON WooCommerce (например, "billing.first_name", "order.number", "order.total")
     /// </summary>

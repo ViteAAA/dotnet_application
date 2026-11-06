@@ -353,13 +353,20 @@ public class PdfSlipExporter : IPdfSlipExporter
                             bool isKitchen = mode == "kitchen" || 
                                 (field.ChildFields.Count == 2 && field.ChildFields.Any(c => c.Key == "item.quantity") && !field.ChildFields.Any(c => c.Key == "item.price"));
 
+                            var blockTitle = col.Item().Text(field.GetEffectiveName()).FontSize(baseSize);
+                            if (field.IsBold) blockTitle.Bold();
+
                             if (isKitchen)
                             {
+                                var itemName = field.ChildFields.FirstOrDefault(c => c.Key == "item.name")?.GetEffectiveName()
+                                               ?? ReceiptField.GetDefaultName("item.name");
+                                var quantityName = field.ChildFields.FirstOrDefault(c => c.Key == "item.quantity")?.GetEffectiveName()
+                                                   ?? ReceiptField.GetDefaultName("item.quantity");
                                 col.Item().Text(new string('-', sepDashLength));
                                 col.Item().Row(r =>
                                 {
-                                    r.RelativeItem(3).Text("Название / Name");
-                                    r.RelativeItem().AlignRight().Text("Кол-во");
+                                    r.RelativeItem(3).Text(itemName);
+                                    r.RelativeItem().AlignRight().Text(quantityName);
                                 });
                                 foreach (var item in slip.Items)
                                 {
@@ -379,7 +386,8 @@ public class PdfSlipExporter : IPdfSlipExporter
                                     foreach (var child in field.ChildFields)
                                     {
                                         var childVal = PrintDocumentBuilder.ResolveItemValue(child.Key, item);
-                                        var text = string.IsNullOrWhiteSpace(child.Name) ? childVal : $"{child.Name}: {childVal}";
+                                        var childName = child.GetEffectiveName();
+                                        var text = string.IsNullOrWhiteSpace(childName) ? childVal : $"{childName}: {childVal}";
                                         var cell = col.Item();
                                         if (child.LineSpacing > 0) cell = cell.PaddingBottom(child.LineSpacing);
                                         cell = child.GetPrintAlign() switch
@@ -409,15 +417,23 @@ public class PdfSlipExporter : IPdfSlipExporter
 
                                     table.Header(header =>
                                     {
+                                        var itemName = field.ChildFields.FirstOrDefault(c => c.Key == "item.name")?.GetEffectiveName()
+                                                       ?? ReceiptField.GetDefaultName("item.name");
+                                        var quantityName = field.ChildFields.FirstOrDefault(c => c.Key == "item.quantity")?.GetEffectiveName()
+                                                           ?? ReceiptField.GetDefaultName("item.quantity");
+                                        var priceName = field.ChildFields.FirstOrDefault(c => c.Key == "item.price")?.GetEffectiveName()
+                                                        ?? ReceiptField.GetDefaultName("item.price");
+                                        var totalName = field.ChildFields.FirstOrDefault(c => c.Key == "item.total")?.GetEffectiveName()
+                                                        ?? ReceiptField.GetDefaultName("item.total");
                                         header.Cell().ColumnSpan(4).PaddingBottom(2).Column(column =>
                                         {
                                             column.Item().Text(new string('-', sepDashLength));
                                             column.Item().Row(row =>
                                             {
-                                                row.RelativeItem(3).Text("Наименование");
-                                                row.RelativeItem().AlignRight().Text("К-во");
-                                                row.RelativeItem().AlignRight().Text("Цена");
-                                                row.RelativeItem().AlignRight().Text("Сумма");
+                                                row.RelativeItem(3).Text(itemName);
+                                                row.RelativeItem().AlignRight().Text(quantityName);
+                                                row.RelativeItem().AlignRight().Text(priceName);
+                                                row.RelativeItem().AlignRight().Text(totalName);
                                             });
                                             column.Item().Text(new string('-', sepDashLength));
                                         });
@@ -446,7 +462,7 @@ public class PdfSlipExporter : IPdfSlipExporter
 
                         if (field.Key == "static.text")
                         {
-                            var text = string.IsNullOrWhiteSpace(field.CustomText) ? field.Name : field.CustomText;
+                            var text = string.IsNullOrWhiteSpace(field.CustomText) ? field.GetEffectiveName() : field.CustomText;
                             var cell = col.Item();
                             if (field.LineSpacing > 0) cell = cell.PaddingBottom(field.LineSpacing);
                             cell = field.GetPrintAlign() switch
@@ -467,14 +483,15 @@ public class PdfSlipExporter : IPdfSlipExporter
                             if (field.LineSpacing > 0) cell = cell.PaddingBottom(field.LineSpacing);
                             cell.Row(row =>
                             {
-                                var left = row.RelativeItem(6).Text(field.Name).FontSize(fontSize);
+                                var left = row.RelativeItem(6).Text(field.GetEffectiveName()).FontSize(fontSize);
                                 var right = row.RelativeItem(4).AlignRight().Text(val).FontSize(fontSize);
                                 if (field.IsBold) { left.Bold(); right.Bold(); }
                             });
                         }
                         else
                         {
-                            var text = string.IsNullOrWhiteSpace(field.Name) ? val : $"{field.Name}: {val}";
+                            var name = field.GetEffectiveName();
+                            var text = string.IsNullOrWhiteSpace(name) ? val : $"{name}: {val}";
                             var cell = col.Item();
                             if (field.LineSpacing > 0) cell = cell.PaddingBottom(field.LineSpacing);
                             cell = field.GetPrintAlign() switch

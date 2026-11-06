@@ -353,13 +353,19 @@ public partial class PrintDocumentBuilder : IPrintDocumentBuilder
                 bool isKitchen = mode == "kitchen" || 
                     (field.ChildFields.Count == 2 && field.ChildFields.Any(c => c.Key == "item.quantity") && !field.ChildFields.Any(c => c.Key == "item.price"));
 
+                AddWrappedLine(bytes, encoding, field.GetEffectiveName(), charsPerLine);
+
                 bytes.AddRange(EscAlignLeft);
                 bytes.AddRange(GetFontSizeCommand(1));
                 bytes.AddRange(EscBoldOff);
 
                 if (isKitchen)
                 {
-                    AddRow(bytes, encoding, "Название / Name", "Кол-во", charsPerLine);
+                    var itemName = field.ChildFields.FirstOrDefault(c => c.Key == "item.name")?.GetEffectiveName()
+                                   ?? ReceiptField.GetDefaultName("item.name");
+                    var quantityName = field.ChildFields.FirstOrDefault(c => c.Key == "item.quantity")?.GetEffectiveName()
+                                       ?? ReceiptField.GetDefaultName("item.quantity");
+                    AddRow(bytes, encoding, itemName, quantityName, charsPerLine);
                     foreach (var item in slip.Items)
                     {
                         AddSeparator(bytes, encoding, charsPerLine);
@@ -376,11 +382,12 @@ public partial class PrintDocumentBuilder : IPrintDocumentBuilder
                             var childVal = ResolveItemValue(child.Key, item);
                             if (child.IsRow)
                             {
-                                AddRow(bytes, encoding, child.Name, childVal, charsPerLine);
+                                AddRow(bytes, encoding, child.GetEffectiveName(), childVal, charsPerLine);
                             }
                             else
                             {
-                                var text = string.IsNullOrWhiteSpace(child.Name) ? childVal : $"{child.Name}: {childVal}";
+                                var childName = child.GetEffectiveName();
+                                var text = string.IsNullOrWhiteSpace(childName) ? childVal : $"{childName}: {childVal}";
                                 AddWrappedLine(bytes, encoding, text, charsPerLine);
                             }
                         }
@@ -390,10 +397,18 @@ public partial class PrintDocumentBuilder : IPrintDocumentBuilder
                 else
                 {
                     // Table (как в default накладной)
-                    if (charsPerLine == 48)
-                        bytes.AddRange(encoding.GetBytes("Наименование          К-во      Цена    Сумма\n"));
-                    else
-                        bytes.AddRange(encoding.GetBytes("Наименование     К-во   Цена   Сумма\n"));
+                    var itemName = field.ChildFields.FirstOrDefault(c => c.Key == "item.name")?.GetEffectiveName()
+                                   ?? ReceiptField.GetDefaultName("item.name");
+                    var quantityName = field.ChildFields.FirstOrDefault(c => c.Key == "item.quantity")?.GetEffectiveName()
+                                       ?? ReceiptField.GetDefaultName("item.quantity");
+                    var priceName = field.ChildFields.FirstOrDefault(c => c.Key == "item.price")?.GetEffectiveName()
+                                    ?? ReceiptField.GetDefaultName("item.price");
+                    var totalName = field.ChildFields.FirstOrDefault(c => c.Key == "item.total")?.GetEffectiveName()
+                                    ?? ReceiptField.GetDefaultName("item.total");
+                    var header = charsPerLine == 48
+                        ? $"{itemName,-22} {quantityName,8} {priceName,8} {totalName,10}"
+                        : $"{itemName,-15} {quantityName,5} {priceName,6} {totalName,7}";
+                    bytes.AddRange(encoding.GetBytes(header + "\n"));
 
                     AddSeparator(bytes, encoding, charsPerLine);
                     if (slip.Items.Count > 0)
@@ -430,18 +445,19 @@ public partial class PrintDocumentBuilder : IPrintDocumentBuilder
 
             if (field.Key == "static.text")
             {
-                var text = string.IsNullOrWhiteSpace(field.CustomText) ? field.Name : field.CustomText;
+                var text = string.IsNullOrWhiteSpace(field.CustomText) ? field.GetEffectiveName() : field.CustomText;
                 AddWrappedLine(bytes, encoding, text, charsPerLine);
             }
             else if (field.IsRow)
             {
                 var val = ResolveOrderValue(field.Key, slip);
-                AddRow(bytes, encoding, field.Name, val, charsPerLine);
+                AddRow(bytes, encoding, field.GetEffectiveName(), val, charsPerLine);
             }
             else
             {
                 var val = ResolveOrderValue(field.Key, slip);
-                var text = string.IsNullOrWhiteSpace(field.Name) ? val : $"{field.Name}: {val}";
+                var name = field.GetEffectiveName();
+                var text = string.IsNullOrWhiteSpace(name) ? val : $"{name}: {val}";
                 AddWrappedLine(bytes, encoding, text, charsPerLine);
             }
 
@@ -468,7 +484,7 @@ public partial class PrintDocumentBuilder : IPrintDocumentBuilder
                 {
                     foreach (var child in field.ChildFields)
                     {
-                        yield return (child.Name, ResolveItemValue(child.Key, item), child);
+                        yield return (child.GetEffectiveName(), ResolveItemValue(child.Key, item), child);
                     }
                 }
                 continue;
@@ -477,12 +493,12 @@ public partial class PrintDocumentBuilder : IPrintDocumentBuilder
             if (field.Key == "static.text")
             {
                 yield return (string.Empty,
-                    string.IsNullOrWhiteSpace(field.CustomText) ? field.Name : field.CustomText,
+                    string.IsNullOrWhiteSpace(field.CustomText) ? field.GetEffectiveName() : field.CustomText,
                     field);
                 continue;
             }
 
-            yield return (field.Name, ResolveOrderValue(field.Key, slip), field);
+            yield return (field.GetEffectiveName(), ResolveOrderValue(field.Key, slip), field);
         }
     }
 

@@ -164,6 +164,9 @@ public partial class PrintDocumentBuilder
 
             if (field.Key == "block.items")
             {
+                AddLine(l, field.GetEffectiveName(), Math.Clamp(field.FontSize, 1, 3), field.IsBold,
+                    field.GetPrintAlign(), field.LineSpacing);
+
                 // Вывод блока заказов в точности как в default шаблоне (накладная или кухня)
                 var mode = field.ItemDisplayMode?.Trim().ToLowerInvariant() ?? "table";
                 bool isKitchen = mode == "kitchen" || 
@@ -171,7 +174,11 @@ public partial class PrintDocumentBuilder
 
                 if (isKitchen)
                 {
-                    AddRowLine(l, "Название / Name", "Кол-во", 1, true, field.LineSpacing);
+                    var itemName = field.ChildFields.FirstOrDefault(c => c.Key == "item.name")?.GetEffectiveName()
+                                   ?? ReceiptField.GetDefaultName("item.name");
+                    var quantityName = field.ChildFields.FirstOrDefault(c => c.Key == "item.quantity")?.GetEffectiveName()
+                                       ?? ReceiptField.GetDefaultName("item.quantity");
+                    AddRowLine(l, itemName, quantityName, 1, true, field.LineSpacing);
                     foreach (var item in slip.Items)
                     {
                         AddSeparatorLine(l, "Dashed");
@@ -194,7 +201,8 @@ public partial class PrintDocumentBuilder
                             }
                             else
                             {
-                                var text = string.IsNullOrWhiteSpace(child.Name) ? childVal : $"{child.Name}: {childVal}";
+                                var childName = child.GetEffectiveName();
+                                var text = string.IsNullOrWhiteSpace(childName) ? childVal : $"{childName}: {childVal}";
                                 AddLine(l, text, Math.Clamp(child.FontSize, 1, 3), child.IsBold,
                                     child.GetPrintAlign(), child.LineSpacing);
                             }
@@ -206,7 +214,15 @@ public partial class PrintDocumentBuilder
                 {
                     // Режим "Table" (по умолчанию, как в default invoice):
                     // Заголовок таблицы с разделителем
-                    AddRowLine(l, "Наименование", "К-во  Цена  Сумма", 1, true);
+                    var itemName = field.ChildFields.FirstOrDefault(c => c.Key == "item.name")?.GetEffectiveName()
+                                   ?? ReceiptField.GetDefaultName("item.name");
+                    var quantityName = field.ChildFields.FirstOrDefault(c => c.Key == "item.quantity")?.GetEffectiveName()
+                                       ?? ReceiptField.GetDefaultName("item.quantity");
+                    var priceName = field.ChildFields.FirstOrDefault(c => c.Key == "item.price")?.GetEffectiveName()
+                                    ?? ReceiptField.GetDefaultName("item.price");
+                    var totalName = field.ChildFields.FirstOrDefault(c => c.Key == "item.total")?.GetEffectiveName()
+                                    ?? ReceiptField.GetDefaultName("item.total");
+                    AddRowLine(l, itemName, $"{quantityName}  {priceName}  {totalName}", 1, true);
                     AddSeparatorLine(l, "Dashed");
                     if (slip.Items.Count > 0)
                     {
@@ -226,7 +242,7 @@ public partial class PrintDocumentBuilder
 
             if (field.Key == "static.text")
             {
-                var text = string.IsNullOrWhiteSpace(field.CustomText) ? field.Name : field.CustomText;
+                var text = string.IsNullOrWhiteSpace(field.CustomText) ? field.GetEffectiveName() : field.CustomText;
                 AddLine(l, text, Math.Clamp(field.FontSize, 1, 3), field.IsBold, field.GetPrintAlign(), field.LineSpacing);
                 continue;
             }
@@ -234,12 +250,13 @@ public partial class PrintDocumentBuilder
             var val = ResolveOrderValue(field.Key, slip);
             if (field.IsRow)
             {
-                AddRowLine(l, field.Name, val, Math.Clamp(field.FontSize, 1, 3), field.IsBold,
+                AddRowLine(l, field.GetEffectiveName(), val, Math.Clamp(field.FontSize, 1, 3), field.IsBold,
                     field.LineSpacing, field.GetPrintAlign());
             }
             else
             {
-                var text = string.IsNullOrWhiteSpace(field.Name) ? val : $"{field.Name}: {val}";
+                var name = field.GetEffectiveName();
+                var text = string.IsNullOrWhiteSpace(name) ? val : $"{name}: {val}";
                 AddLine(l, text, Math.Clamp(field.FontSize, 1, 3), field.IsBold,
                     field.GetPrintAlign(), field.LineSpacing);
             }
