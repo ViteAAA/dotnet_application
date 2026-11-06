@@ -17,6 +17,7 @@ public static class ProcessingData
     private static readonly string SitesFilePath = Path.Combine(AppDataFolder, "sites.json");
     private static readonly string PrintersFilePath = Path.Combine(AppDataFolder, "printers.json");
     private static readonly string OrdersFilePath = Path.Combine(AppDataFolder, "processed_orders.json");
+    private static readonly string DismissedOrdersFilePath = Path.Combine(AppDataFolder, "dismissed_orders.json");
     private static readonly string CompanyFilePath = Path.Combine(AppDataFolder, "company.json");
     private static readonly string PrintLogFilePath = Path.Combine(AppDataFolder, "print_log.txt");
 
@@ -288,6 +289,35 @@ public static class ProcessingData
         catch (Exception ex)
         {
             Console.WriteLine($"[ProcessingData Error] Не удалось сохранить историю заказов: {ex.Message}");
+        }
+    }
+
+    public static List<string> LoadDismissedOrderKeys()
+    {
+        if (!File.Exists(DismissedOrdersFilePath))
+            return [];
+
+        try
+        {
+            var json = File.ReadAllText(DismissedOrdersFilePath);
+            return JsonSerializer.Deserialize<List<string>>(json) ?? [];
+        }
+        catch
+        {
+            return [];
+        }
+    }
+
+    public static void SaveDismissedOrderKeys(IEnumerable<string> keys)
+    {
+        try
+        {
+            var json = JsonSerializer.Serialize(keys, JsonOptions);
+            File.WriteAllText(DismissedOrdersFilePath, json);
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[ProcessingData Error] Не удалось сохранить скрытые заказы: {ex.Message}");
         }
     }
 

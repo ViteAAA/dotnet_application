@@ -13,6 +13,9 @@ namespace ApplicationView;
 
 public partial class MainWindow : Window
 {
+    private const int MaxOrderHistory = 500;
+    private const int MaxDismissedOrderKeys = 1000;
+
     private ObservableCollection<WooCommerceSite> Sites { get; set; } = [];
     private ObservableCollection<WooOrder> Orders { get; set; } = [];
     private ObservableCollection<PrinterSettingsItem> Printers { get; set; } = [];
@@ -20,6 +23,8 @@ public partial class MainWindow : Window
     private readonly WooCommerceService _wooService = new();
     private readonly PrintingService _printingService = new(new Adapters.WpfTemplateProvider());
     private readonly HashSet<string> _handledOrderKeys = new(StringComparer.OrdinalIgnoreCase);
+    private readonly HashSet<string> _dismissedOrderKeys = new(StringComparer.OrdinalIgnoreCase);
+    private readonly Queue<string> _dismissedOrderKeyOrder = new();
     
     private CancellationTokenSource? _pollCancellationTokenSource;
     private bool _suppressPrinterSave;
@@ -71,11 +76,20 @@ public partial class MainWindow : Window
     {
         Orders.Clear();
         _handledOrderKeys.Clear();
+        _dismissedOrderKeys.Clear();
+        _dismissedOrderKeyOrder.Clear();
+
+        foreach (var key in ProcessingData.LoadDismissedOrderKeys())
+            AddDismissedOrderKey(key);
 
         foreach (var record in ProcessingData.LoadProcessedOrders()
-                     .OrderByDescending(x => x.LastAttemptUtc))
+                     .OrderByDescending(x => x.LastAttemptUtc)
+                     .Take(MaxOrderHistory))
         {
             var key = OrderKey(record.OrderId, record.SiteUrl);
+            if (_dismissedOrderKeys.Contains(key))
+                continue;
+
             _handledOrderKeys.Add(key);
 
             Orders.Add(new WooOrder
@@ -94,6 +108,8 @@ public partial class MainWindow : Window
 
     private void PersistOrders()
     {
+        TrimOrderHistory();
+
         var records = Orders.Select(o => new ProcessedOrderRecord
         {
             OrderId = o.OrderId,
@@ -108,6 +124,70 @@ public partial class MainWindow : Window
         }).ToList();
 
         ProcessingData.SaveProcessedOrders(records);
+    }
+
+    private void TrimOrderHistory()
+    {
+        while (Orders.Count > MaxOrderHistory)
+        {
+            var oldest = Orders[^1];
+            Orders.RemoveAt(Orders.Count - 1);
+            var key = OrderKey(oldest.OrderId, oldest.SiteUrl);
+            if (!_dismissedOrderKeys.Contains(key))
+                _handledOrderKeys.Remove(key);
+        }
+    }
+
+    private void AddDismissedOrderKey(string key)
+    {
+        if (string.IsNullOrWhiteSpace(key) || !_dismissedOrderKeys.Add(key))
+            return;
+
+        _dismissedOrderKeyOrder.Enqueue(key);
+        _handledOrderKeys.Add(key);
+
+        while (_dismissedOrderKeyOrder.Count > MaxDismissedOrderKeys)
+        {
+            var expiredKey = _dismissedOrderKeyOrder.Dequeue();
+            _dismissedOrderKeys.Remove(expiredKey);
+            if (!Orders.Any(order => OrderKey(order.OrderId, order.SiteUrl) == expiredKey))
+                _handledOrderKeys.Remove(expiredKey);
+        }
+    }
+
+    private void DeleteOrder_Click(object sender, RoutedEventArgs e)
+    {
+        if (OrdersDataGrid.SelectedItem is WooOrder order)
+            DismissOrder(order);
+    }
+
+    private void DismissOrder(WooOrder order)
+    {
+        if (!Orders.Remove(order))
+            return;
+
+        AddDismissedOrderKey(OrderKey(order.OrderId, order.SiteUrl));
+        ProcessingData.SaveDismissedOrderKeys(_dismissedOrderKeyOrder);
+        PersistOrders();
+    }
+
+    private void ClearOrders_Click(object sender, RoutedEventArgs e)
+    {
+        if (Orders.Count == 0)
+            return;
+
+        var result = MessageBox.Show(
+            "Удалить сохраненную историю заказов из приложения? Заказы в WooCommerce не изменятся.",
+            "Очистка истории", MessageBoxButton.YesNo, MessageBoxImage.Question);
+        if (result != MessageBoxResult.Yes)
+            return;
+
+        foreach (var order in Orders.ToList())
+            AddDismissedOrderKey(OrderKey(order.OrderId, order.SiteUrl));
+
+        Orders.Clear();
+        ProcessingData.SaveDismissedOrderKeys(_dismissedOrderKeyOrder);
+        PersistOrders();
     }
 
     private void HostsListView_SelectionChanged(object sender, SelectionChangedEventArgs e)
@@ -258,6 +338,23 @@ public partial class MainWindow : Window
     private void SavePrintersToStorage()
     {
         ProcessingData.SavePrinterSettings(Printers);
+    }
+
+    private void DeleteNetworkPrinter_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is not MenuItem { Parent: ContextMenu { PlacementTarget: FrameworkElement { DataContext: PrinterSettingsItem printer } } })
+            return;
+
+        if (!string.Equals(printer.ConnectionType, "Network", StringComparison.OrdinalIgnoreCase))
+        {
+            MessageBox.Show("Из приложения можно удалить только добавленные NET-принтеры. Системные принтеры удаляются в Windows.",
+                "Удаление принтера", MessageBoxButton.OK, MessageBoxImage.Information);
+            return;
+        }
+
+        printer.PropertyChanged -= Printer_PropertyChanged;
+        Printers.Remove(printer);
+        SavePrintersToStorage();
     }
 
     private void BtnStartListen_Click(object sender, RoutedEventArgs e)
