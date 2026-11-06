@@ -10,32 +10,37 @@ public partial class PrintDocumentBuilder
 {
     public IReadOnlyList<PrintTextLine> BuildFormLines(
         PrintFormType formType,
-        Slip slip,
+        Slip? slip,
         float widthMm,
         IReadOnlyList<ReceiptField>? templateFields = null)
     {
         return formType switch
         {
-            PrintFormType.KitchenSlip => BuildKitchenLines(slip),
-            PrintFormType.CustomTemplate when templateFields is { Count: > 0 } => BuildTemplateTextLines(slip, templateFields),
+            PrintFormType.KitchenSlip => slip != null ? BuildKitchenLines(slip) : BuildTestPageLines(widthMm),
+            PrintFormType.CustomTemplate when templateFields is { Count: > 0 } => slip != null ? BuildTemplateTextLines(slip, templateFields, widthMm) : BuildTestPageLines(widthMm),
             PrintFormType.TestPage => BuildTestPageLines(widthMm),
-            _ => BuildInvoiceLines(slip)
+            _ => slip != null ? BuildInvoiceLines(slip) : BuildTestPageLines(widthMm)
         };
     }
 
     private static void AddLine(List<PrintTextLine> lines, string? text, int size = 1, bool bold = false,
-        PrintTextAlign align = PrintTextAlign.Left)
+        PrintTextAlign align = PrintTextAlign.Left, int spacingAfter = 0)
     {
         // Многострочный текст разбиваем, перенос по ширине делает GDI.
-        foreach (var part in (text ?? string.Empty).Replace("\r", string.Empty).Split('\n'))
-            lines.Add(new PrintTextLine { Text = part, FontSize = size, Bold = bold, Align = align });
+        var parts = (text ?? string.Empty).Replace("\r", string.Empty).Split('\n');
+        for (int i = 0; i < parts.Length; i++)
+        {
+            // Отступ снизу применяется к последней строке разбитого абзаца
+            var spacing = (i == parts.Length - 1) ? spacingAfter : 0;
+            lines.Add(new PrintTextLine { Text = parts[i], FontSize = size, Bold = bold, Align = align, SpacingAfter = spacing });
+        }
     }
 
-    private static void AddRowLine(List<PrintTextLine> lines, string left, string? right, int size = 1, bool bold = false) =>
-        lines.Add(new PrintTextLine { Text = left, RightText = right ?? string.Empty, FontSize = size, Bold = bold });
+    private static void AddRowLine(List<PrintTextLine> lines, string left, string? right, int size = 1, bool bold = false, int spacingAfter = 0) =>
+        lines.Add(new PrintTextLine { Text = left, RightText = right ?? string.Empty, FontSize = size, Bold = bold, SpacingAfter = spacingAfter });
 
-    private static void AddSeparatorLine(List<PrintTextLine> lines) =>
-        lines.Add(new PrintTextLine { IsSeparator = true });
+    private static void AddSeparatorLine(List<PrintTextLine> lines, string style = "Dashed", int spacingAfter = 0) =>
+        lines.Add(new PrintTextLine { IsSeparator = true, SeparatorStyle = style, SpacingAfter = spacingAfter, Bold = false});
 
     private static List<PrintTextLine> BuildInvoiceLines(Slip slip)
     {
@@ -47,8 +52,8 @@ public partial class PrintDocumentBuilder
         AddSeparatorLine(l);
         AddLine(l, "");
 
-        AddLine(l, "НАКЛАДНАЯ / INVOICE", 2, true, PrintTextAlign.Center);
-        AddLine(l, $"Заказ № / Order # {slip.OrderId}", 2, true, PrintTextAlign.Center);
+        AddLine(l, "НАКЛАДНАЯ", 2, false, PrintTextAlign.Center);
+        AddLine(l, $"Заказ № {slip.OrderId}", 2, false, PrintTextAlign.Center);
         AddLine(l, "");
 
         AddLine(l, "Грузоотправитель:");
@@ -70,7 +75,7 @@ public partial class PrintDocumentBuilder
         AddLine(l, $"Количество человек: {slip.PersonsCount}");
         AddSeparatorLine(l);
 
-        AddRowLine(l, "Наименование", "К-во  Цена  Сумма", 1, true);
+        AddRowLine(l, "Наименование", "К-во  Цена  Сумма");
         AddSeparatorLine(l);
         if (slip.Items.Count > 0)
         {
@@ -84,7 +89,7 @@ public partial class PrintDocumentBuilder
         }
 
         var total = slip.TotalAmount?.ToString("F2") ?? "0.00";
-        AddRowLine(l, "Итого к оплате:", total, 1, true);
+        AddRowLine(l, "Итого к оплате:", total);
         AddSeparatorLine(l);
         var payMethod = !string.IsNullOrWhiteSpace(slip.PaymentMethod) ? slip.PaymentMethod : "Наличные";
         AddRowLine(l, payMethod, total);
@@ -102,9 +107,7 @@ public partial class PrintDocumentBuilder
         AddSeparatorLine(l);
 
         AddLine(l, slip.DeliveryType, 2, true);
-        AddLine(l, "");
-        AddLine(l, slip.CurrencyNote, 1, false, PrintTextAlign.Center);
-        AddLine(l, slip.Footer, 1, false, PrintTextAlign.Center);
+        
         return l;
     }
 
@@ -141,13 +144,100 @@ public partial class PrintDocumentBuilder
         return l;
     }
 
-    private static List<PrintTextLine> BuildTemplateTextLines(Slip slip, IReadOnlyList<ReceiptField> fields)
+    private static List<PrintTextLine> BuildTemplateTextLines(Slip slip, IReadOnlyList<ReceiptField> fields, float widthMm = 80)
     {
         var l = new List<PrintTextLine>();
-        foreach (var line in BuildTemplateLines(slip, fields))
+        foreach (var field in fields)
         {
-            var text = string.IsNullOrWhiteSpace(line.Label) ? line.Value : $"{line.Label}: {line.Value}";
-            AddLine(l, text, Math.Clamp(line.Field.FontSize, 1, 3), line.Field.IsBold, line.Field.GetPrintAlign());
+            if (field.CheckIsSeparator())
+            {
+                AddSeparatorLine(l, field.GetEffectiveSeparatorStyle(), field.LineSpacing);
+                continue;
+            }
+
+            if (field.CheckIsSpacer())
+            {
+                AddLine(l, "", 1, false, PrintTextAlign.Left, Math.Max(4, field.LineSpacing));
+                continue;
+            }
+
+            if (field.Key == "block.items")
+            {
+                // Вывод блока заказов в точности как в default шаблоне (накладная или кухня)
+                var mode = field.ItemDisplayMode?.Trim().ToLowerInvariant() ?? "table";
+                bool isKitchen = mode == "kitchen" || 
+                    (field.ChildFields.Count == 2 && field.ChildFields.Any(c => c.Key == "item.quantity") && !field.ChildFields.Any(c => c.Key == "item.price"));
+
+                if (isKitchen)
+                {
+                    AddRowLine(l, "Название / Name", "Кол-во", 1, true, field.LineSpacing);
+                    foreach (var item in slip.Items)
+                    {
+                        AddSeparatorLine(l, "Dashed");
+                        AddRowLine(l, item.Name ?? "Товар / Item", $"{item.Quantity ?? 1}", Math.Clamp(field.FontSize, 1, 3));
+                    }
+                    AddSeparatorLine(l);
+                }
+                else if (mode == "list")
+                {
+                    // Пользовательский список свойств
+                    foreach (var item in slip.Items)
+                    {
+                        foreach (var child in field.ChildFields)
+                        {
+                            var childVal = ResolveItemValue(child.Key, item);
+                            if (child.IsRow)
+                            {
+                                AddRowLine(l, child.Name, childVal, Math.Clamp(child.FontSize, 1, 3));
+                            }
+                            else
+                            {
+                                var text = string.IsNullOrWhiteSpace(child.Name) ? childVal : $"{child.Name}: {childVal}";
+                                AddLine(l, text, Math.Clamp(child.FontSize, 1, 3));
+                            }
+                        }
+                        AddSeparatorLine(l, "Dashed");
+                    }
+                }
+                else
+                {
+                    // Режим "Table" (по умолчанию, как в default invoice):
+                    // Заголовок таблицы с разделителем
+                    AddRowLine(l, "Наименование", "К-во  Цена  Сумма", 1, true);
+                    AddSeparatorLine(l, "Dashed");
+                    if (slip.Items.Count > 0)
+                    {
+                        foreach (var item in slip.Items)
+                        {
+                            AddLine(l, item.Name ?? "Товар", Math.Clamp(field.FontSize, 1, 3));
+                            var qty = item.Quantity ?? 1;
+                            var price = item.Price?.ToString("F2") ?? "0.00";
+                            var total = item.TotalPrice?.ToString("F2") ?? (item.Subtotal?.ToString("F2") ?? "0.00");
+                            AddRowLine(l, "", $"{qty} шт x {price}  {total}", 1, false);
+                        }
+                        AddSeparatorLine(l, "Dashed", field.LineSpacing);
+                    }
+                }
+                continue;
+            }
+
+            if (field.Key == "static.text")
+            {
+                var text = string.IsNullOrWhiteSpace(field.CustomText) ? field.Name : field.CustomText;
+                AddLine(l, text, Math.Clamp(field.FontSize, 1, 3));
+                continue;
+            }
+
+            var val = ResolveOrderValue(field.Key, slip);
+            if (field.IsRow)
+            {
+                AddRowLine(l, field.Name, val, Math.Clamp(field.FontSize, 1, 3));
+            }
+            else
+            {
+                var text = string.IsNullOrWhiteSpace(field.Name) ? val : $"{field.Name}: {val}";
+                AddLine(l, text, Math.Clamp(field.FontSize, 1, 3));
+            }
         }
         return l;
     }

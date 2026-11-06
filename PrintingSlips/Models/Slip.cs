@@ -1,4 +1,4 @@
-﻿
+
 namespace PrintingSlips.Models;
 
 /// <summary>
@@ -127,6 +127,9 @@ public class SlipItem
 
     // item.price - [Товар: Цена]
     public decimal? Price { get; set; }
+
+    // item.subtotal - [Товар: Промежуточная сумма]
+    public decimal? Subtotal { get; set; }
 
     // item.total - [Товар: Сумма]
     public decimal? TotalPrice { get; set; }

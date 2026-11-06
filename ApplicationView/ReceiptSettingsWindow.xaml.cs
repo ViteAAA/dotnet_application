@@ -1,4 +1,4 @@
-﻿using System.Collections.ObjectModel;
+using System.Collections.ObjectModel;
 using System.Drawing.Printing;
 using System.Windows;
 using ApplicationView.Models;
@@ -60,9 +60,14 @@ public partial class ReceiptSettingsWindow : Window
         { "order.sign_received", "[Подпись: груз принял]" },
         { "order.footer", "[Подвал чека]" },
 
-        // Специальные блоки
+        // Специальные блоки и разделители
         { "block.items", "📦 [Блок: Список товаров]" },
-        { "static.text", "Текст (Статический)" }
+        { "static.text", "📝 Текст (Статический)" },
+        { "separator.dashed", "--- [Разделитель: Пунктирная строка] ---" },
+        { "separator.solid", "─── [Разделитель: Сплошная линия] ───" },
+        { "separator.stars", "*** [Разделитель: Строка звёздочек] ***" },
+        { "separator.double", "=== [Разделитель: Двойная линия] ===" },
+        { "space.empty", "␣ [Пустой отступ (пропуск строки)]" }
     };
 
     // Опции полей позиции товара
@@ -208,8 +213,69 @@ public partial class ReceiptSettingsWindow : Window
 
     private void BtnDelete_Click(object sender, RoutedEventArgs e)
     {
-        int idx = LstReceiptFields.SelectedIndex;
-        if (idx >= 0) ReceiptFields.RemoveAt(idx);
+        if (LstReceiptFields.SelectedItem is ReceiptField selected)
+        {
+            ReceiptFields.Remove(selected);
+        }
+        else
+        {
+            int idx = LstReceiptFields.SelectedIndex;
+            if (idx >= 0 && idx < ReceiptFields.Count)
+                ReceiptFields.RemoveAt(idx);
+        }
+    }
+
+    private void BtnRemoveFieldItem_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is FrameworkElement { DataContext: ReceiptField field })
+        {
+            ReceiptFields.Remove(field);
+        }
+    }
+
+    private void BtnAddDashedSeparator_Click(object sender, RoutedEventArgs e)
+    {
+        ReceiptFields.Add(new ReceiptField("--- Разделитель ---", "separator.dashed")
+        {
+            IsSeparator = true,
+            SeparatorStyle = "Dashed"
+        });
+    }
+
+    private void BtnAddSpacer_Click(object sender, RoutedEventArgs e)
+    {
+        ReceiptFields.Add(new ReceiptField("Отступ", "space.empty")
+        {
+            LineSpacing = 4
+        });
+    }
+
+    private void BtnResetToInvoice_Click(object sender, RoutedEventArgs e)
+    {
+        var result = MessageBox.Show(
+            "Сбросить структуру чека к стандартной накладной (58 мм)?\nВсе текущие поля будут заменены стандартными с таблицей товаров и разделителями.",
+            "Сброс шаблона", MessageBoxButton.YesNo, MessageBoxImage.Question);
+
+        if (result == MessageBoxResult.Yes)
+        {
+            ReceiptFields.Clear();
+            foreach (var f in ProcessingData.GetDefaultInvoiceTemplate())
+                ReceiptFields.Add(f);
+        }
+    }
+
+    private void BtnResetToKitchen_Click(object sender, RoutedEventArgs e)
+    {
+        var result = MessageBox.Show(
+            "Сбросить структуру чека к стандартному кухонному чеку (80 мм)?\nВсе текущие поля будут заменены стандартным шаблоном для кухни.",
+            "Сброс шаблона", MessageBoxButton.YesNo, MessageBoxImage.Question);
+
+        if (result == MessageBoxResult.Yes)
+        {
+            ReceiptFields.Clear();
+            foreach (var f in ProcessingData.GetDefaultKitchenTemplate())
+                ReceiptFields.Add(f);
+        }
     }
 
     private void BtnAddSubField_Click(object sender, RoutedEventArgs e)
@@ -224,7 +290,11 @@ public partial class ReceiptSettingsWindow : Window
         {
             foreach (var parent in ReceiptFields)
             {
-                if (parent.ChildFields.Remove(subField)) break;
+                if (parent.ChildFields.Contains(subField))
+                {
+                    parent.ChildFields.Remove(subField);
+                    break;
+                }
             }
         }
     }

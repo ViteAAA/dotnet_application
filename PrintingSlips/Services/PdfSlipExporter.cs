@@ -307,6 +307,7 @@ public class PdfSlipExporter : IPdfSlipExporter
         fontFamily = string.IsNullOrWhiteSpace(fontFamily) ? "Courier New" : fontFamily;
         float widthInPoints = widthMm * 2.83465f;
         var baseSize = widthMm <= 60 ? 7f : 8f;
+        var sepDashLength = widthMm <= 60 ? 34 : 42;
 
         var doc = Document.Create(container =>
         {
@@ -318,31 +319,173 @@ public class PdfSlipExporter : IPdfSlipExporter
 
                 page.Content().Column(col =>
                 {
-                    col.Spacing(2);
+                    col.Spacing(1);
 
-                    foreach (var line in PrintDocumentBuilder.BuildTemplateLines(slip, fields))
+                    foreach (var field in fields)
                     {
-                        var text = string.IsNullOrWhiteSpace(line.Label)
-                            ? line.Value
-                            : $"{line.Label}: {line.Value}";
+                        if (field.CheckIsSeparator())
+                        {
+                            var style = field.GetEffectiveSeparatorStyle().ToLowerInvariant();
+                            var sepCell = col.Item();
+                            if (field.LineSpacing > 0)
+                                sepCell = sepCell.PaddingBottom(field.LineSpacing);
 
-                        var fontSize = line.Field.FontSize switch
+                            if (style.Contains("star"))
+                                sepCell.AlignCenter().Text(new string('*', 32));
+                            else if (style.Contains("double"))
+                                sepCell.Text(new string('=', sepDashLength));
+                            else if (style.Contains("solid"))
+                                sepCell.PaddingVertical(1).LineHorizontal(0.5f);
+                            else
+                                sepCell.Text(new string('-', sepDashLength));
+                            continue;
+                        }
+
+                        if (field.CheckIsSpacer())
+                        {
+                            col.Item().PaddingVertical(Math.Max(2, field.LineSpacing)).Text(" ");
+                            continue;
+                        }
+
+                        if (field.Key == "block.items")
+                        {
+                            var mode = field.ItemDisplayMode?.Trim().ToLowerInvariant() ?? "table";
+                            bool isKitchen = mode == "kitchen" || 
+                                (field.ChildFields.Count == 2 && field.ChildFields.Any(c => c.Key == "item.quantity") && !field.ChildFields.Any(c => c.Key == "item.price"));
+
+                            if (isKitchen)
+                            {
+                                col.Item().Text(new string('-', sepDashLength));
+                                col.Item().Row(r =>
+                                {
+                                    r.RelativeItem(3).Text("Название / Name");
+                                    r.RelativeItem().AlignRight().Text("Кол-во");
+                                });
+                                foreach (var item in slip.Items)
+                                {
+                                    col.Item().Text(new string('-', sepDashLength));
+                                    col.Item().Row(r =>
+                                    {
+                                        r.RelativeItem(3).Text(item.Name ?? "Товар");
+                                        r.RelativeItem().AlignRight().Text($"{item.Quantity ?? 1}").FontSize(baseSize + 1);
+                                    });
+                                }
+                                col.Item().Text(new string('-', sepDashLength));
+                            }
+                            else if (mode == "list")
+                            {
+                                foreach (var item in slip.Items)
+                                {
+                                    foreach (var child in field.ChildFields)
+                                    {
+                                        var childVal = PrintDocumentBuilder.ResolveItemValue(child.Key, item);
+                                        var text = string.IsNullOrWhiteSpace(child.Name) ? childVal : $"{child.Name}: {childVal}";
+                                        var cell = col.Item();
+                                        if (child.LineSpacing > 0) cell = cell.PaddingBottom(child.LineSpacing);
+                                        cell = child.GetPrintAlign() switch
+                                        {
+                                            PrintTextAlign.Center => cell.AlignCenter(),
+                                            PrintTextAlign.Right => cell.AlignRight(),
+                                            _ => cell.AlignLeft()
+                                        };
+                                        var t = cell.Text(text).FontSize(baseSize);
+                                        if (child.IsBold) t.Bold();
+                                    }
+                                    col.Item().Text(new string('-', sepDashLength));
+                                }
+                            }
+                            else
+                            {
+                                // Режим Table (как в default накладной)
+                                col.Item().Table(table =>
+                                {
+                                    table.ColumnsDefinition(columns =>
+                                    {
+                                        columns.RelativeColumn(3);
+                                        columns.RelativeColumn();
+                                        columns.RelativeColumn();
+                                        columns.RelativeColumn();
+                                    });
+
+                                    table.Header(header =>
+                                    {
+                                        header.Cell().ColumnSpan(4).PaddingBottom(2).Column(column =>
+                                        {
+                                            column.Item().Text(new string('-', sepDashLength));
+                                            column.Item().Row(row =>
+                                            {
+                                                row.RelativeItem(3).Text("Наименование");
+                                                row.RelativeItem().AlignRight().Text("К-во");
+                                                row.RelativeItem().AlignRight().Text("Цена");
+                                                row.RelativeItem().AlignRight().Text("Сумма");
+                                            });
+                                            column.Item().Text(new string('-', sepDashLength));
+                                        });
+                                    });
+
+                                    foreach (var item in slip.Items)
+                                    {
+                                        table.Cell().ColumnSpan(4).Text(item.Name ?? "Товар");
+                                        table.Cell().Text("");
+                                        table.Cell().AlignRight().Text($"{item.Quantity ?? 1} шт x");
+                                        table.Cell().AlignRight().Text($"{item.Price?.ToString("F2") ?? "0.00"}");
+                                        table.Cell().AlignRight().Text($"{item.TotalPrice?.ToString("F2") ?? (item.Subtotal?.ToString("F2") ?? "0.00")}");
+                                    }
+                                });
+                                col.Item().Text(new string('-', sepDashLength));
+                            }
+                            continue;
+                        }
+
+                        var fontSize = field.FontSize switch
                         {
                             2 => baseSize + 2,
                             3 => baseSize + 5,
                             _ => baseSize
                         };
 
-                        var cell = col.Item();
-                        cell = line.Field.GetPrintAlign() switch
+                        if (field.Key == "static.text")
                         {
-                            PrintTextAlign.Center => cell.AlignCenter(),
-                            PrintTextAlign.Right => cell.AlignRight(),
-                            _ => cell.AlignLeft()
-                        };
-                        var item = cell.Text(text).FontSize(fontSize);
-                        if (line.Field.IsBold)
-                            item.Bold();
+                            var text = string.IsNullOrWhiteSpace(field.CustomText) ? field.Name : field.CustomText;
+                            var cell = col.Item();
+                            if (field.LineSpacing > 0) cell = cell.PaddingBottom(field.LineSpacing);
+                            cell = field.GetPrintAlign() switch
+                            {
+                                PrintTextAlign.Center => cell.AlignCenter(),
+                                PrintTextAlign.Right => cell.AlignRight(),
+                                _ => cell.AlignLeft()
+                            };
+                            var item = cell.Text(text).FontSize(fontSize);
+                            if (field.IsBold) item.Bold();
+                            continue;
+                        }
+
+                        var val = PrintDocumentBuilder.ResolveOrderValue(field.Key, slip);
+                        if (field.IsRow)
+                        {
+                            var cell = col.Item();
+                            if (field.LineSpacing > 0) cell = cell.PaddingBottom(field.LineSpacing);
+                            cell.Row(row =>
+                            {
+                                var left = row.RelativeItem(6).Text(field.Name).FontSize(fontSize);
+                                var right = row.RelativeItem(4).AlignRight().Text(val).FontSize(fontSize);
+                                if (field.IsBold) { left.Bold(); right.Bold(); }
+                            });
+                        }
+                        else
+                        {
+                            var text = string.IsNullOrWhiteSpace(field.Name) ? val : $"{field.Name}: {val}";
+                            var cell = col.Item();
+                            if (field.LineSpacing > 0) cell = cell.PaddingBottom(field.LineSpacing);
+                            cell = field.GetPrintAlign() switch
+                            {
+                                PrintTextAlign.Center => cell.AlignCenter(),
+                                PrintTextAlign.Right => cell.AlignRight(),
+                                _ => cell.AlignLeft()
+                            };
+                            var item = cell.Text(text).FontSize(fontSize);
+                            if (field.IsBold) item.Bold();
+                        }
                     }
                 });
             });

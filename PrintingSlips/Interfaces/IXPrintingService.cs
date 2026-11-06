@@ -1,4 +1,4 @@
-﻿using PrintingSlips.Models;
+using PrintingSlips.Models;
 
 namespace PrintingSlips.Interfaces;
 

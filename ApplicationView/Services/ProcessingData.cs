@@ -1,4 +1,4 @@
-﻿using System.Collections.ObjectModel;
+using System.Collections.ObjectModel;
 using System.IO;
 using System.Text.Json;
 using PrintingSlips.Models;
@@ -106,31 +106,36 @@ public static class ProcessingData
 
     public static List<ReceiptField> GetDefaultInvoiceTemplate()
     {
-        // Пречек / накладная (XP-58 / ~58 мм). Подписи RU+EN — для ТЗ «в одном чеке».
+        // Пречек / накладная (XP-58 / ~58 мм). Включает разделители, 2-колоночные строки и структурированную таблицу товаров
         return
         [
+            new ReceiptField("--- Звездочки ---", "separator.stars") { IsSeparator = true, SeparatorStyle = "Stars" },
             new ReceiptField("", "order.seller_title"),
             new ReceiptField("", "order.seller_name"),
             new ReceiptField("ИНН", "order.seller_inn"),
-            new ReceiptField("НАКЛАДНАЯ / INVOICE", "static.text", "НАКЛАДНАЯ / INVOICE", isItemContainer: false)
-            {
-                IsBold = true,
-                FontSize = 2
-            },
-            new ReceiptField("Заказ № / Order #", "order.number") { IsBold = true, FontSize = 2 },
-            new ReceiptField("Грузоотправитель / Shipper", "order.seller_title"),
-            new ReceiptField("Грузополучатель / Consignee", "shipping.first_name"),
-            new ReceiptField("Фамилия получателя", "shipping.last_name"),
-            new ReceiptField("Адрес / Address", "shipping.address_1"),
-            new ReceiptField("Телефон / Phone", "billing.phone"),
-            new ReceiptField("Менеджер / Manager", "order.manager"),
-            new ReceiptField("Заказ принят / Accepted", "order.date_created"),
-            new ReceiptField("Накладная оформлена / Issued", "order.date_created"),
-            new ReceiptField("Время доставки / Deliver by", "order.delivery_time"),
-            new ReceiptField("Заказ доставлен / Delivered", "order.delivered_at"),
-            new ReceiptField("Кол-во человек / Persons", "order.persons"),
+            new ReceiptField("--- Звездочки ---", "separator.stars") { IsSeparator = true, SeparatorStyle = "Stars" },
+            new ReceiptField("Отступ", "space.empty") { LineSpacing = 4 },
+            new ReceiptField("НАКЛАДНАЯ / INVOICE", "static.text", "НАКЛАДНАЯ / INVOICE") { IsBold = true, FontSize = 2, Align = "Center" },
+            new ReceiptField("Заказ № / Order #", "order.number") { IsBold = true, FontSize = 2, Align = "Center" },
+            new ReceiptField("Отступ", "space.empty") { LineSpacing = 4 },
+            new ReceiptField("Грузоотправитель:", "static.text", "Грузоотправитель:"),
+            new ReceiptField("", "order.seller_title"),
+            new ReceiptField("ИНН", "order.seller_inn"),
+            new ReceiptField("Отступ", "space.empty") { LineSpacing = 4 },
+            new ReceiptField("Грузополучатель:", "shipping.first_name"),
+            new ReceiptField("Телефон", "billing.phone"),
+            new ReceiptField("Отступ", "space.empty") { LineSpacing = 4 },
+            new ReceiptField("Менеджер", "order.manager"),
+            new ReceiptField("Заказ принят:", "order.date_created") { IsRow = true },
+            new ReceiptField("Накладная оформлена:", "order.date_created") { IsRow = true },
+            new ReceiptField("Время доставки:", "order.delivery_time") { IsRow = true },
+            new ReceiptField("Заказ доставлен:", "order.delivered_at") { IsRow = true },
+            new ReceiptField("Отступ", "space.empty") { LineSpacing = 4 },
+            new ReceiptField("Количество человек:", "order.persons"),
+            new ReceiptField("--- Разделитель ---", "separator.dashed") { IsSeparator = true, SeparatorStyle = "Dashed" },
             new ReceiptField("Список товаров", "block.items")
             {
+                ItemDisplayMode = "Table",
                 ChildFields = new ObservableCollection<ReceiptField>
                 {
                     new ReceiptField("Наименование", "item.name"),
@@ -139,21 +144,26 @@ public static class ProcessingData
                     new ReceiptField("Сумма", "item.total")
                 }
             },
-            new ReceiptField("Итого / Total", "order.total") { IsBold = true },
-            new ReceiptField("Оплата / Payment", "order.payment_method_title"),
-            new ReceiptField("Персон / Persons", "order.persons"),
-            new ReceiptField("Канал / Channel", "order.sales_channel"),
-            new ReceiptField("FN / Order FN", "order.number"),
+            new ReceiptField("Итого к оплате:", "order.total") { IsRow = true, IsBold = true },
+            new ReceiptField("--- Разделитель ---", "separator.dashed") { IsSeparator = true, SeparatorStyle = "Dashed" },
+            new ReceiptField("Способ оплаты", "order.payment_method_title") { IsRow = true },
+            new ReceiptField("Отступ", "space.empty") { LineSpacing = 4 },
             new ReceiptField("", "order.sign_released"),
+            new ReceiptField("Отступ", "space.empty") { LineSpacing = 4 },
             new ReceiptField("", "order.sign_received"),
-            new ReceiptField("Комментарий / Note", "order.customer_note"),
-            new ReceiptField("Доставка / Delivery", "order.delivery_type") { IsBold = true, FontSize = 2 },
-            new ReceiptField("Код доставки", "order.delivery_code"),
-            new ReceiptField("", "order.currency_note"),
-            new ReceiptField("", "order.footer")
+            new ReceiptField("Отступ", "space.empty") { LineSpacing = 4 },
+            new ReceiptField("Комментарий к заказу:", "order.customer_note"),
+            new ReceiptField("Способ оплаты:", "order.payment_method_title"),
+            new ReceiptField("Количество персон:", "order.persons"),
+            new ReceiptField("Канал продаж:", "order.sales_channel"),
+            new ReceiptField("Номер заказа FN:", "order.number"),
+            new ReceiptField("--- Разделитель ---", "separator.dashed") { IsSeparator = true, SeparatorStyle = "Dashed" },
+            new ReceiptField("", "order.delivery_type") { IsBold = true, FontSize = 2 },
+            new ReceiptField("Отступ", "space.empty") { LineSpacing = 4 },
+            new ReceiptField("", "order.currency_note") { Align = "Center" },
+            new ReceiptField("", "order.footer") { Align = "Center" }
         ];
     }
-
 
     /// <summary>
     /// Кухонный чек по умолчанию (XP-80 / ~80 мм): время, тип доставки, позиции, адрес, оплата.
@@ -162,25 +172,30 @@ public static class ProcessingData
     {
         return
         [
-            new ReceiptField("", "order.delivery_time") { IsBold = true, FontSize = 3 },
-            new ReceiptField("Доставка / Delivery", "order.delivery_type") { IsBold = true, FontSize = 2 },
-            new ReceiptField("ЗАКАЗ № / ORDER #", "order.number") { IsBold = true, FontSize = 2 },
-            new ReceiptField("Оформлен / Placed", "order.date_created"),
-            new ReceiptField("Доставить к / Deliver by", "order.delivery_time"),
+            new ReceiptField("--- Разделитель ---", "separator.dashed") { IsSeparator = true, SeparatorStyle = "Dashed" },
+            new ReceiptField("", "order.delivery_time") { IsBold = true, FontSize = 3, Align = "Center" },
+            new ReceiptField("--- Разделитель ---", "separator.dashed") { IsSeparator = true, SeparatorStyle = "Dashed" },
+            new ReceiptField("", "order.delivery_type") { IsBold = true, FontSize = 2, Align = "Center" },
+            new ReceiptField("ЗАКАЗ № / ORDER #", "order.number") { IsBold = true, FontSize = 2, Align = "Center" },
+            new ReceiptField("Оформлен / Placed:", "order.date_created"),
+            new ReceiptField("Доставить к / Deliver by:", "order.delivery_time"),
+            new ReceiptField("--- Разделитель ---", "separator.dashed") { IsSeparator = true, SeparatorStyle = "Dashed" },
             new ReceiptField("Позиции / Items", "block.items")
             {
+                ItemDisplayMode = "Kitchen",
                 ChildFields = new ObservableCollection<ReceiptField>
                 {
                     new ReceiptField("Название / Name", "item.name"),
                     new ReceiptField("Кол-во / Qty", "item.quantity")
                 }
             },
-            new ReceiptField("Адрес / Address", "shipping.address_1"),
-            new ReceiptField("Ком. к заказу / Note", "order.customer_note"),
-            new ReceiptField("Оплата / Payment", "order.payment_method_title"),
-            new ReceiptField("Персон / Persons", "order.persons"),
-            new ReceiptField("Канал / Channel", "order.sales_channel"),
-            new ReceiptField("FN", "order.number")
+            new ReceiptField("--- Разделитель ---", "separator.dashed") { IsSeparator = true, SeparatorStyle = "Dashed" },
+            new ReceiptField("Адрес / Address:", "shipping.address_1"),
+            new ReceiptField("Ком. к заказу / Note:", "order.customer_note"),
+            new ReceiptField("Оплата / Payment:", "order.payment_method_title"),
+            new ReceiptField("Персон / Persons:", "order.persons"),
+            new ReceiptField("Канал / Channel:", "order.sales_channel"),
+            new ReceiptField("FN:", "order.number")
         ];
     }
 

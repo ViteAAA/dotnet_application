@@ -321,19 +321,134 @@ public partial class PrintDocumentBuilder : IPrintDocumentBuilder
         var encoding = profile.Encoding;
 
         AddInitialization(bytes, profile);
-        foreach (var line in BuildTemplateLines(slip, fields))
+        foreach (var field in fields)
         {
-            bytes.AddRange(line.Field.GetPrintAlign() switch
+            if (field.CheckIsSeparator())
+            {
+                bytes.AddRange(EscAlignLeft);
+                var style = field.GetEffectiveSeparatorStyle().ToLowerInvariant();
+                char c = style.Contains("star") ? '*' : style.Contains("double") ? '=' : '-';
+                if (style.Contains("dash"))
+                {
+                    // Пунктир чередованием дефисов и пробелов
+                    var dashed = string.Concat(Enumerable.Repeat("- ", charsPerLine / 2));
+                    bytes.AddRange(encoding.GetBytes(dashed.PadRight(charsPerLine) + "\n"));
+                }
+                else
+                {
+                    bytes.AddRange(encoding.GetBytes(new string(c, charsPerLine) + "\n"));
+                }
+                continue;
+            }
+
+            if (field.CheckIsSpacer())
+            {
+                bytes.AddRange(encoding.GetBytes("\n"));
+                continue;
+            }
+
+            if (field.Key == "block.items")
+            {
+                var mode = field.ItemDisplayMode?.Trim().ToLowerInvariant() ?? "table";
+                bool isKitchen = mode == "kitchen" || 
+                    (field.ChildFields.Count == 2 && field.ChildFields.Any(c => c.Key == "item.quantity") && !field.ChildFields.Any(c => c.Key == "item.price"));
+
+                bytes.AddRange(EscAlignLeft);
+                bytes.AddRange(GetFontSizeCommand(1));
+                bytes.AddRange(EscBoldOff);
+
+                if (isKitchen)
+                {
+                    AddRow(bytes, encoding, "Название / Name", "Кол-во", charsPerLine);
+                    foreach (var item in slip.Items)
+                    {
+                        AddSeparator(bytes, encoding, charsPerLine);
+                        AddRow(bytes, encoding, item.Name ?? "Товар / Item", $"{item.Quantity ?? 1}", charsPerLine);
+                    }
+                    AddSeparator(bytes, encoding, charsPerLine);
+                }
+                else if (mode == "list")
+                {
+                    foreach (var item in slip.Items)
+                    {
+                        foreach (var child in field.ChildFields)
+                        {
+                            var childVal = ResolveItemValue(child.Key, item);
+                            if (child.IsRow)
+                            {
+                                AddRow(bytes, encoding, child.Name, childVal, charsPerLine);
+                            }
+                            else
+                            {
+                                var text = string.IsNullOrWhiteSpace(child.Name) ? childVal : $"{child.Name}: {childVal}";
+                                AddWrappedLine(bytes, encoding, text, charsPerLine);
+                            }
+                        }
+                        AddSeparator(bytes, encoding, charsPerLine);
+                    }
+                }
+                else
+                {
+                    // Table (как в default накладной)
+                    if (charsPerLine == 48)
+                        bytes.AddRange(encoding.GetBytes("Наименование          К-во      Цена    Сумма\n"));
+                    else
+                        bytes.AddRange(encoding.GetBytes("Наименование     К-во   Цена   Сумма\n"));
+
+                    AddSeparator(bytes, encoding, charsPerLine);
+                    if (slip.Items.Count > 0)
+                    {
+                        foreach (var item in slip.Items)
+                        {
+                            var name = item.Name ?? "Товар";
+                            bytes.AddRange(encoding.GetBytes($"{name}\n"));
+
+                            var qtyStr = $"{item.Quantity ?? 1} шт x";
+                            var priceStr = $"{item.Price?.ToString("F2") ?? "0.00"}";
+                            var totalStr = $"{item.TotalPrice?.ToString("F2") ?? (item.Subtotal?.ToString("F2") ?? "0.00")}";
+
+                            string detailLine = charsPerLine == 48
+                                ? string.Format("  {0,-15} {1,8} {2,8} {3,10}", "", qtyStr, priceStr, totalStr)
+                                : string.Format("  {0,-10} {1,5} {2,6} {3,7}", "", qtyStr, priceStr, totalStr);
+
+                            bytes.AddRange(encoding.GetBytes($"{detailLine}\n"));
+                        }
+                        AddSeparator(bytes, encoding, charsPerLine);
+                    }
+                }
+                continue;
+            }
+
+            bytes.AddRange(field.GetPrintAlign() switch
             {
                 PrintTextAlign.Center => EscAlignCenter,
                 PrintTextAlign.Right => EscAlignRight,
                 _ => EscAlignLeft
             });
-            bytes.AddRange(GetFontSizeCommand(line.Field.FontSize));
-            bytes.AddRange(line.Field.IsBold ? EscBoldOn : EscBoldOff);
+            bytes.AddRange(GetFontSizeCommand(field.FontSize));
+            bytes.AddRange(field.IsBold ? EscBoldOn : EscBoldOff);
 
-            var text = string.IsNullOrWhiteSpace(line.Label) ? line.Value : $"{line.Label}: {line.Value}";
-            AddWrappedLine(bytes, encoding, text, charsPerLine);
+            if (field.Key == "static.text")
+            {
+                var text = string.IsNullOrWhiteSpace(field.CustomText) ? field.Name : field.CustomText;
+                AddWrappedLine(bytes, encoding, text, charsPerLine);
+            }
+            else if (field.IsRow)
+            {
+                var val = ResolveOrderValue(field.Key, slip);
+                AddRow(bytes, encoding, field.Name, val, charsPerLine);
+            }
+            else
+            {
+                var val = ResolveOrderValue(field.Key, slip);
+                var text = string.IsNullOrWhiteSpace(field.Name) ? val : $"{field.Name}: {val}";
+                AddWrappedLine(bytes, encoding, text, charsPerLine);
+            }
+
+            if (field.LineSpacing > 3)
+            {
+                bytes.AddRange(encoding.GetBytes("\n"));
+            }
         }
 
         bytes.AddRange(EscAlignLeft);

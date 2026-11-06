@@ -1,4 +1,4 @@
-﻿using System.Collections.Generic;
+using System.Collections.Generic;
 using PrintingSlips.Models;
 using ApplicationView.Services; // Где лежит ваш ProcessingData
 using PrintingSlips.Interfaces;

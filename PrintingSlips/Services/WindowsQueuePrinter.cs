@@ -68,15 +68,39 @@ public static class WindowsQueuePrinter
             using var font = CreateFont(family, line, widthMm);
             if (line.IsSeparator)
             {
-                var h = font.GetHeight(g);
-                using var pen = new Pen(Color.Black, 1);
-                g.DrawLine(pen, left, y + h / 2, left + width, y + h / 2);
-                y += h;
+                var h = Math.Max(6f, font.GetHeight(g) * 0.7f);
+                var style = (line.SeparatorStyle ?? "Solid").ToLowerInvariant();
+                if (style.Contains("star"))
+                {
+                    var starsCount = Math.Max(12, (int)(width / (font.SizeInPoints * 0.6f)));
+                    var stars = new string('*', Math.Min(starsCount, 48));
+                    using var sfStars = new StringFormat { Alignment = StringAlignment.Center };
+                    g.DrawString(stars, font, Brushes.Black, new RectangleF(left, y, width, h), sfStars);
+                }
+                else
+                {
+                    using var pen = new Pen(Color.Black, 1);
+                    if (style.Contains("dash"))
+                        pen.DashStyle = System.Drawing.Drawing2D.DashStyle.Dash;
+                    else if (style.Contains("dot"))
+                        pen.DashStyle = System.Drawing.Drawing2D.DashStyle.Dot;
+
+                    if (style.Contains("double"))
+                    {
+                        g.DrawLine(pen, left, y + h / 2 - 2, left + width, y + h / 2 - 2);
+                        g.DrawLine(pen, left, y + h / 2 + 2, left + width, y + h / 2 + 2);
+                    }
+                    else
+                    {
+                        g.DrawLine(pen, left, y + h / 2, left + width, y + h / 2);
+                    }
+                }
+                y += h + line.SpacingAfter;
                 continue;
             }
 
             var rect = new RectangleF(left, y, width, 10000);
-            if (line.RightText != null)
+            if (!string.IsNullOrEmpty(line.RightText))
             {
                 var rightSize = g.MeasureString(line.RightText, font);
                 using var rf = new StringFormat { Alignment = StringAlignment.Far };
@@ -87,7 +111,7 @@ public static class WindowsQueuePrinter
                     using var lf = new StringFormat();
                     g.DrawString(line.Text, font, Brushes.Black, new RectangleF(left, y, leftWidth, 10000), lf);
                     g.DrawString(line.RightText, font, Brushes.Black, rect, rf);
-                    y += Math.Max(Math.Max(leftSize.Height, rightSize.Height), font.GetHeight(g));
+                    y += Math.Max(Math.Max(leftSize.Height, rightSize.Height), font.GetHeight(g)) + line.SpacingAfter;
                 }
                 else
                 {
@@ -96,7 +120,7 @@ public static class WindowsQueuePrinter
                     g.DrawString(line.Text, font, Brushes.Black, rect);
                     y += sz.Height;
                     g.DrawString(line.RightText, font, Brushes.Black, new RectangleF(left, y, width, 10000), rf);
-                    y += Math.Max(rightSize.Height, font.GetHeight(g));
+                    y += Math.Max(rightSize.Height, font.GetHeight(g)) + line.SpacingAfter;
                 }
                 continue;
             }
@@ -105,7 +129,7 @@ public static class WindowsQueuePrinter
             var text = string.IsNullOrEmpty(line.Text) ? " " : line.Text;
             var size = g.MeasureString(text, font, (int)width, sf);
             g.DrawString(text, font, Brushes.Black, rect, sf);
-            y += Math.Max(size.Height, font.GetHeight(g));
+            y += Math.Max(size.Height, font.GetHeight(g)) + line.SpacingAfter;
         }
     }
 
@@ -117,7 +141,7 @@ public static class WindowsQueuePrinter
         g.PageUnit = GraphicsUnit.Display;
         float y = 0;
         DrawLines(g, lines, family, widthMm, 0, widthHundredths, ref y);
-        return (int)Math.Ceiling(y * 1.05f);
+        return (int)Math.Ceiling(y * 1.15f) + 80;
     }
 
     private static Font CreateFont(string family, PrintTextLine line, float widthMm) =>

@@ -60,11 +60,12 @@ public class PrintingService : IXPrintingService
     public async Task<bool> PrintTestPageAsync(PrinterDestination printer)
     {
         var width = printer.WidthMm > 0 ? printer.WidthMm : 80;
-        // Экспорт PDF копии теста
+        // Экспорт PDF копии теста в безопасную директорию AppData
         try
         {
             var pdfBytes = _pdfExporter.ExportTestPagePdf(width);
-            var testPdfPath = Path.Combine(AppContext.BaseDirectory, $"test_page_{DateTime.Now:yyyyMMdd_HHmmss}.pdf");
+            var safeFolder = GetSafePdfDirectory();
+            var testPdfPath = Path.Combine(safeFolder, $"test_page_{DateTime.Now:yyyyMMdd_HHmmss}.pdf");
             File.WriteAllBytes(testPdfPath, pdfBytes);
         }
         catch (Exception ex)
@@ -73,7 +74,7 @@ public class PrintingService : IXPrintingService
         }
 
         var fontFamily = string.IsNullOrWhiteSpace(printer.FontFamily) ? "Courier New" : printer.FontFamily;
-        var lines = _documentBuilder.BuildFormLines(PrintFormType.TestPage, null!, width); // TestPage не использует Slip
+        var lines = _documentBuilder.BuildFormLines(PrintFormType.TestPage, null, width);
         return await PrintViaQueueAsync(printer, lines, fontFamily, width, "Printer_Test");
     }
 
@@ -82,7 +83,7 @@ public class PrintingService : IXPrintingService
     /// </summary>
     public string ExportFormToPdf(PrintFormType formType, Slip slip, float widthMm = 80, string? outputFolder = null)
     {
-        var folder = outputFolder ?? Path.Combine(AppContext.BaseDirectory, "PdfExports");
+        var folder = outputFolder ?? GetSafePdfDirectory();
         var fields = formType == PrintFormType.CustomTemplate && _templateProvider != null
             ? _templateProvider.GetTemplateForPrinter("Default")
             : null;
@@ -95,12 +96,32 @@ public class PrintingService : IXPrintingService
         try
         {
             var pdfBytes = _pdfExporter.ExportFormPdf(formType, slip, width, fields, fontFamily);
-            var path = Path.Combine(AppContext.BaseDirectory, $"check_{slip.OrderId}.pdf");
+            var safeFolder = GetSafePdfDirectory();
+            var path = Path.Combine(safeFolder, $"check_{slip.OrderId}.pdf");
             File.WriteAllBytes(path, pdfBytes);
         }
         catch (Exception ex)
         {
             Console.WriteLine($"[PDF] Ошибка создания preview: {ex.Message}");
+        }
+    }
+
+    private static string GetSafePdfDirectory()
+    {
+        try
+        {
+            var folder = Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
+                "PrintingSlips",
+                "PdfExports"
+            );
+            if (!Directory.Exists(folder))
+                Directory.CreateDirectory(folder);
+            return folder;
+        }
+        catch
+        {
+            return AppContext.BaseDirectory;
         }
     }
 

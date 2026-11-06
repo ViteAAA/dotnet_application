@@ -1,4 +1,4 @@
-﻿<Window x:Class="ApplicationView.ReceiptSettingsWindow"
+<Window x:Class="ApplicationView.ReceiptSettingsWindow"
         xmlns:services="clr-namespace:ApplicationView.Services"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
@@ -70,6 +70,7 @@
                                         <ColumnDefinition Width="*" />
                                         <ColumnDefinition Width="Auto" />
                                         <ColumnDefinition Width="220" />
+                                        <ColumnDefinition Width="Auto" />
                                     </Grid.ColumnDefinitions>
 
                                     <TextBlock Text="☰" FontSize="16" Foreground="#95A5A6" VerticalAlignment="Center" Margin="0,0,10,0" />
@@ -84,9 +85,9 @@
                                     <TextBlock Grid.Column="2" Text="➔" FontSize="16" Foreground="#BDC3C7"
                                                VerticalAlignment="Center" Margin="0,12,10,0" />
 
-                                    <!-- Выбор источника данных (Исправлено SelectedValuePath и SelectedValue) -->
+                                    <!-- Выбор источника данных -->
                                     <StackPanel Grid.Column="3">
-                                        <TextBlock Text="Данные из WooCommerce:" FontSize="11" Foreground="#7F8C8D" />
+                                        <TextBlock Text="Данные из WooCommerce / Разделитель:" FontSize="11" Foreground="#7F8C8D" />
                                         <ComboBox Height="26" VerticalContentAlignment="Center"
                                                   SelectedValuePath="Key"
                                                   DisplayMemberPath="Value"
@@ -94,16 +95,31 @@
                                                   ItemsSource="{Binding DataContext.MainWooCommerceOptions, RelativeSource={RelativeSource AncestorType=Window}}">
                                         </ComboBox>
                                     </StackPanel>
+
+                                    <!-- Кнопка прямого удаления поля из строки -->
+                                    <Button Grid.Column="4" Content="❌" Width="26" Height="26"
+                                            ToolTip="Удалить это поле"
+                                            Margin="8,12,0,0" Background="#FEE2E2" Foreground="#DC2626"
+                                            BorderBrush="#FCA5A5" BorderThickness="1"
+                                            Click="BtnRemoveFieldItem_Click" FontWeight="Bold" />
                                 </Grid>
 
+                                <!-- Дополнительные настройки строки: шрифт, отступ, 2 колонки, выравнивание -->
                                 <StackPanel Orientation="Horizontal" Margin="25,6,0,0">
-                                    <TextBlock Text="Размер шрифта (1-3):" VerticalAlignment="Center" FontSize="11" Foreground="#7F8C8D" />
-                                    <TextBox Width="35" Height="24" Margin="6,0,10,0"
+                                    <TextBlock Text="Шрифт (1-3):" VerticalAlignment="Center" FontSize="11" Foreground="#7F8C8D" />
+                                    <TextBox Width="30" Height="24" Margin="4,0,8,0"
                                              Text="{Binding FontSize, UpdateSourceTrigger=PropertyChanged}" />
-                                    <CheckBox Content="Жирный" VerticalAlignment="Center"
+                                    <CheckBox Content="Жирный" VerticalAlignment="Center" Margin="0,0,8,0"
                                               IsChecked="{Binding IsBold, UpdateSourceTrigger=PropertyChanged}" />
-                                    <TextBlock Text="Выравнивание:" VerticalAlignment="Center" FontSize="11" Foreground="#7F8C8D" Margin="12,0,0,0" />
-                                    <ComboBox Width="100" Height="24" Margin="6,0,0,0" SelectedValuePath="Tag"
+                                    <CheckBox Content="В 2 колонки (значение справа)" VerticalAlignment="Center" Margin="0,0,10,0"
+                                              ToolTip="Метка слева, а данные прижаты к правому краю чека"
+                                              IsChecked="{Binding IsRow, UpdateSourceTrigger=PropertyChanged}" />
+                                    <TextBlock Text="Отступ снизу (pt):" VerticalAlignment="Center" FontSize="11" Foreground="#7F8C8D" />
+                                    <TextBox Width="30" Height="24" Margin="4,0,10,0"
+                                             ToolTip="Межстрочный интервал / дополнительный вертикальный отступ в pt"
+                                             Text="{Binding LineSpacing, UpdateSourceTrigger=PropertyChanged}" />
+                                    <TextBlock Text="Выравнивание:" VerticalAlignment="Center" FontSize="11" Foreground="#7F8C8D" Margin="4,0,0,0" />
+                                    <ComboBox Width="95" Height="24" Margin="4,0,0,0" SelectedValuePath="Tag"
                                               SelectedValue="{Binding Align, UpdateSourceTrigger=PropertyChanged}" ToolTip="Выравнивание">
                                         <ComboBoxItem Content="Слева" Tag="Left" />
                                         <ComboBoxItem Content="По центру" Tag="Center" />
@@ -111,6 +127,7 @@
                                     </ComboBox>
                                 </StackPanel>
 
+                                <!-- Настройки для статического текста -->
                                 <StackPanel Orientation="Horizontal" Margin="25,6,0,0">
                                     <StackPanel.Style>
                                         <Style TargetType="StackPanel">
@@ -123,11 +140,11 @@
                                         </Style>
                                     </StackPanel.Style>
                                     <TextBlock Text="Текст:" VerticalAlignment="Center" FontSize="11" Foreground="#7F8C8D" />
-                                    <TextBox Width="300" Height="24" Margin="6,0,0,0"
+                                    <TextBox Width="320" Height="24" Margin="6,0,0,0"
                                              Text="{Binding CustomText, UpdateSourceTrigger=PropertyChanged}" />
                                 </StackPanel>
 
-                                <!-- КОНТЕЙНЕР ДЛЯ ШАБЛОНА ТОВАРА (Исправлено Binding Key вместо Value) -->
+                                <!-- КОНТЕЙНЕР ДЛЯ ШАБЛОНА ТОВАРА (block.items) -->
                                 <Border Margin="25,10,0,5" Padding="10" Background="#F0F4F8" BorderBrush="#CBD5E1" BorderThickness="1" CornerRadius="4">
                                     <Border.Style>
                                         <Style TargetType="Border">
@@ -141,8 +158,23 @@
                                     </Border.Style>
 
                                     <StackPanel>
-                                        <TextBlock Text="📋 Шаблон отображения единицы товара (применится ко всем позициям):" 
-                                                   FontWeight="Bold" FontSize="11" Foreground="#334155" Margin="0,0,0,8"/>
+                                        <Grid Margin="0,0,0,8">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="Auto" />
+                                                <ColumnDefinition Width="*" />
+                                            </Grid.ColumnDefinitions>
+                                            <TextBlock Text="📦 Формат вывода заказов:" 
+                                                       FontWeight="Bold" FontSize="11" Foreground="#334155" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                                            <ComboBox Grid.Column="1" Height="26" SelectedValuePath="Tag"
+                                                      SelectedValue="{Binding ItemDisplayMode, UpdateSourceTrigger=PropertyChanged}">
+                                                <ComboBoxItem Content="Таблица (как в накладной: Название, К-во x Цена = Сумма)" Tag="Table" />
+                                                <ComboBoxItem Content="Кухня (как на кухне: Название + Кол-во)" Tag="Kitchen" />
+                                                <ComboBoxItem Content="По списку параметров ниже" Tag="List" />
+                                            </ComboBox>
+                                        </Grid>
+
+                                        <TextBlock Text="📋 Параметры единицы товара (можно удалять и добавлять поля):" 
+                                                   FontSize="11" Foreground="#475569" Margin="0,0,0,6"/>
 
                                         <!-- Вложенный список полей товара -->
                                         <ItemsControl ItemsSource="{Binding ChildFields}">
@@ -151,7 +183,7 @@
                                                     <Grid Margin="0,2">
                                                         <Grid.ColumnDefinitions>
                                                             <ColumnDefinition Width="*" />
-                                                            <ColumnDefinition Width="200" />
+                                                            <ColumnDefinition Width="180" />
                                                             <ColumnDefinition Width="Auto" />
                                                             <ColumnDefinition Width="Auto" />
                                                             <ColumnDefinition Width="Auto" />
@@ -167,10 +199,11 @@
                                                                   ItemsSource="{Binding DataContext.ItemWooCommerceOptions, RelativeSource={RelativeSource AncestorType=Window}}" />
 
                                                         <Button Grid.Column="2" Content="❌" Width="24" Height="24"
-                                                                Click="BtnRemoveSubField_Click" Background="Transparent" BorderThickness="0" />
-                                                        <TextBox Grid.Column="3" Width="35" Height="24" Margin="5,0,0,0"
+                                                                ToolTip="Удалить этот параметр товара"
+                                                                Click="BtnRemoveSubField_Click" Background="#FEE2E2" Foreground="#DC2626" BorderBrush="#FCA5A5" BorderThickness="1" />
+                                                        <TextBox Grid.Column="3" Width="30" Height="24" Margin="5,0,0,0" ToolTip="Размер шрифта"
                                                              Text="{Binding FontSize, UpdateSourceTrigger=PropertyChanged}" />
-                                                        <ComboBox Grid.Column="4" Width="90" Height="24" Margin="5,0,0,0" SelectedValuePath="Tag"
+                                                        <ComboBox Grid.Column="4" Width="85" Height="24" Margin="5,0,0,0" SelectedValuePath="Tag"
                                                                   SelectedValue="{Binding Align, UpdateSourceTrigger=PropertyChanged}" ToolTip="Выравнивание">
                                                             <ComboBoxItem Content="Слева" Tag="Left" />
                                                             <ComboBoxItem Content="По центру" Tag="Center" />
@@ -194,17 +227,33 @@
 
             <!-- УПРАВЛЕНИЕ -->
             <StackPanel Grid.Column="1" Margin="15,0,0,0" VerticalAlignment="Top">
-                <Button Name="BtnAddField" Content="➕ Добавить поле" Height="32" Margin="0,0,0,15" Background="#3498DB"
+                <Button Name="BtnAddField" Content="➕ Добавить поле" Height="30" Margin="0,0,0,6" Background="#3498DB"
                         Foreground="White" FontWeight="Bold" BorderThickness="0" Click="BtnAddField_Click" />
 
+                <Button Name="BtnAddDashedSeparator" Content="➕ Пунктир" Height="30" Margin="0,0,0,6" Background="#2563EB"
+                        Foreground="White" FontWeight="SemiBold" BorderThickness="0" Click="BtnAddDashedSeparator_Click"
+                        ToolTip="Вставить пунктирную строку-разделитель" />
+
+                <Button Name="BtnAddSpacer" Content="␣ Пустой отступ" Height="30" Margin="0,0,0,15" Background="#64748B"
+                        Foreground="White" BorderThickness="0" Click="BtnAddSpacer_Click"
+                        ToolTip="Вставить строку-отступ между блоками" />
+
                 <TextBlock Text="Порядок поля:" FontSize="12" FontWeight="Bold" Foreground="#34495E" Margin="0,0,0,5" />
-                <Button Name="BtnMoveUp" Content="▲ Выше" Height="30" Margin="0,0,0,6" Background="#ECF0F1"
+                <Button Name="BtnMoveUp" Content="▲ Выше" Height="28" Margin="0,0,0,5" Background="#ECF0F1"
                         BorderBrush="#BDC3C7" Click="BtnUp_Click" />
-                <Button Name="BtnMoveDown" Content="▼ Ниже" Height="30" Margin="0,0,0,15" Background="#ECF0F1"
+                <Button Name="BtnMoveDown" Content="▼ Ниже" Height="28" Margin="0,0,0,10" Background="#ECF0F1"
                         BorderBrush="#BDC3C7" Click="BtnDown_Click" />
 
-                <Button Name="BtnRemoveField" Content="❌ Удалить поле" Height="30" Background="#E74C3C"
+                <Button Name="BtnRemoveField" Content="❌ Удалить поле" Height="28" Margin="0,0,0,15" Background="#E74C3C"
                         Foreground="White" BorderThickness="0" Click="BtnDelete_Click" />
+
+                <TextBlock Text="Сброс шаблона:" FontSize="11" FontWeight="Bold" Foreground="#64748B" Margin="0,5,0,4" />
+                <Button Name="BtnResetInvoice" Content="🔄 Накладная 58мм" Height="26" Margin="0,0,0,5"
+                        Background="#F1F5F9" BorderBrush="#CBD5E1" Click="BtnResetToInvoice_Click"
+                        ToolTip="Загрузить структуру стандартной накладной (58 мм) с таблицей заказов" />
+                <Button Name="BtnResetKitchen" Content="🔄 Кухня 80мм" Height="26"
+                        Background="#F1F5F9" BorderBrush="#CBD5E1" Click="BtnResetToKitchen_Click"
+                        ToolTip="Загрузить структуру стандартного кухонного чека (80 мм)" />
             </StackPanel>
         </Grid>
 

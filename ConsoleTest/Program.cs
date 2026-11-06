@@ -1,4 +1,4 @@
-﻿
+using System;
 var folderPath = Path.Combine(
     Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), 
     "YourAppName"

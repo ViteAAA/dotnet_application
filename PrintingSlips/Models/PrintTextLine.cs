@@ -16,6 +16,12 @@ public sealed class PrintTextLine
 
     /// <summary>Горизонтальный разделитель вместо текста.</summary>
     public bool IsSeparator { get; init; }
+
+    /// <summary>Стиль разделителя: "Dashed", "Solid", "Dotted", "Stars", "Double".</summary>
+    public string SeparatorStyle { get; init; } = "Solid";
+
+    /// <summary>Дополнительный вертикальный отступ после строки (межстрочный интервал в pt).</summary>
+    public int SpacingAfter { get; init; } = 0;
 }
 
 public enum PrintTextAlign { Left, Center, Right }

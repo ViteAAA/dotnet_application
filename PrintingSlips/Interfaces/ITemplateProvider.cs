@@ -1,4 +1,4 @@
-﻿using PrintingSlips.Models; // Или namespace, где лежит ReceiptField
+using PrintingSlips.Models; // Или namespace, где лежит ReceiptField
 
 namespace PrintingSlips.Interfaces;
 

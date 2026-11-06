@@ -1,4 +1,4 @@
-﻿namespace PrintingSlips.Models;
+namespace PrintingSlips.Models;
 
 public class WooCommerceSite
 {
