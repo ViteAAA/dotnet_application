@@ -36,8 +36,9 @@ public partial class PrintDocumentBuilder
         }
     }
 
-    private static void AddRowLine(List<PrintTextLine> lines, string left, string? right, int size = 1, bool bold = false, int spacingAfter = 0) =>
-        lines.Add(new PrintTextLine { Text = left, RightText = right ?? string.Empty, FontSize = size, Bold = bold, SpacingAfter = spacingAfter });
+    private static void AddRowLine(List<PrintTextLine> lines, string left, string? right, int size = 1, bool bold = false,
+        int spacingAfter = 0, PrintTextAlign align = PrintTextAlign.Left) =>
+        lines.Add(new PrintTextLine { Text = left, RightText = right ?? string.Empty, FontSize = size, Bold = bold, Align = align, SpacingAfter = spacingAfter });
 
     private static void AddSeparatorLine(List<PrintTextLine> lines, string style = "Dashed", int spacingAfter = 0) =>
         lines.Add(new PrintTextLine { IsSeparator = true, SeparatorStyle = style, SpacingAfter = spacingAfter, Bold = false});
@@ -188,12 +189,14 @@ public partial class PrintDocumentBuilder
                             var childVal = ResolveItemValue(child.Key, item);
                             if (child.IsRow)
                             {
-                                AddRowLine(l, child.Name, childVal, Math.Clamp(child.FontSize, 1, 3));
+                                AddRowLine(l, child.Name, childVal, Math.Clamp(child.FontSize, 1, 3), child.IsBold,
+                                    child.LineSpacing, child.GetPrintAlign());
                             }
                             else
                             {
                                 var text = string.IsNullOrWhiteSpace(child.Name) ? childVal : $"{child.Name}: {childVal}";
-                                AddLine(l, text, Math.Clamp(child.FontSize, 1, 3));
+                                AddLine(l, text, Math.Clamp(child.FontSize, 1, 3), child.IsBold,
+                                    child.GetPrintAlign(), child.LineSpacing);
                             }
                         }
                         AddSeparatorLine(l, "Dashed");
@@ -224,19 +227,21 @@ public partial class PrintDocumentBuilder
             if (field.Key == "static.text")
             {
                 var text = string.IsNullOrWhiteSpace(field.CustomText) ? field.Name : field.CustomText;
-                AddLine(l, text, Math.Clamp(field.FontSize, 1, 3));
+                AddLine(l, text, Math.Clamp(field.FontSize, 1, 3), field.IsBold, field.GetPrintAlign(), field.LineSpacing);
                 continue;
             }
 
             var val = ResolveOrderValue(field.Key, slip);
             if (field.IsRow)
             {
-                AddRowLine(l, field.Name, val, Math.Clamp(field.FontSize, 1, 3));
+                AddRowLine(l, field.Name, val, Math.Clamp(field.FontSize, 1, 3), field.IsBold,
+                    field.LineSpacing, field.GetPrintAlign());
             }
             else
             {
                 var text = string.IsNullOrWhiteSpace(field.Name) ? val : $"{field.Name}: {val}";
-                AddLine(l, text, Math.Clamp(field.FontSize, 1, 3));
+                AddLine(l, text, Math.Clamp(field.FontSize, 1, 3), field.IsBold,
+                    field.GetPrintAlign(), field.LineSpacing);
             }
         }
         return l;

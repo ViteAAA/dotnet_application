@@ -539,6 +539,7 @@ public partial class PrintDocumentBuilder : IPrintDocumentBuilder
         "order.number" => slip.OrderId,
         "order.status" => slip.OrderStatus ?? string.Empty,
         "order.date_created" => slip.OrderDate?.ToString("dd.MM.yyyy HH:mm") ?? string.Empty,
+        "order.time_created" => slip.OrderDate?.ToString("HH:mm") ?? string.Empty,
         "order.payment_method_title" => slip.PaymentMethod ?? string.Empty,
         "order.customer_note" => slip.CustomerNote ?? string.Empty,
         "order.currency" => slip.Currency ?? string.Empty,

@@ -22,6 +22,7 @@ public partial class ReceiptSettingsWindow : Window
         { "order.number", "[ID / Номер заказа]" },
         { "order.status", "[Статус заказа]" },
         { "order.date_created", "[Дата создания]" },
+        { "order.time_created", "[Время создания заказа]" },
         { "order.payment_method_title", "[Способ оплаты]" },
         { "order.customer_note", "[Примечание покупателя]" },
         { "order.currency", "[Валюта]" },

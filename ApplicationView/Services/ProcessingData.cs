@@ -177,7 +177,7 @@ public static class ProcessingData
             new ReceiptField("--- Разделитель ---", "separator.dashed") { IsSeparator = true, SeparatorStyle = "Dashed" },
             new ReceiptField("", "order.delivery_type") { IsBold = true, FontSize = 2, Align = "Center" },
             new ReceiptField("ЗАКАЗ № / ORDER #", "order.number") { IsBold = true, FontSize = 2, Align = "Center" },
-            new ReceiptField("Оформлен / Placed:", "order.date_created"),
+            new ReceiptField("Оформлен / Placed:", "order.time_created"),
             new ReceiptField("Доставить к / Deliver by:", "order.delivery_time"),
             new ReceiptField("--- Разделитель ---", "separator.dashed") { IsSeparator = true, SeparatorStyle = "Dashed" },
             new ReceiptField("Позиции / Items", "block.items")
