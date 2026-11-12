@@ -6,11 +6,8 @@ using PrintingSlips.Models;
 namespace PrintingSlips.Services;
 
 /// <summary>
-/// Сервис печати. Активный путь — очередь печати Windows (GDI, PrintDocument) по имени
-/// принтера (PrinterDestination.Name) для любых ConnectionType (USB / Windows / Network-IP):
-/// так применяются настройки драйвера XPrinter и шрифт PrinterDestination.FontFamily.
-/// Host/Port для отправки данных не используются. ESC/POS-методы (RAW/TCP) оставлены
-/// как неиспользуемый запасной код.
+/// Печатает Windows-принтеры через очередь GDI, а сетевые принтеры — напрямую по TCP
+/// с использованием ESC/POS.
 /// </summary>
 public class PrintingService : IXPrintingService
 {
@@ -49,7 +46,13 @@ public class PrintingService : IXPrintingService
         var fontFamily = string.IsNullOrWhiteSpace(printer.FontFamily) ? "Courier New" : printer.FontFamily;
         ExportPdfPreview(slip, formType, width, fields, fontFamily);
 
-        // Активный путь: очередь Windows / GDI (драйвер + шрифт), не RAW ESC/POS.
+        if (IsNetworkPrinter(printer))
+        {
+            var profile = _documentBuilder.ResolvePrinterProfile(printer.Name);
+            var form = _documentBuilder.BuildForm(formType, slip, width, profile, fields);
+            return await SendToDestinationAsync(printer, form.EscPosBytes, $"Slip_{slip.OrderId}");
+        }
+
         var lines = _documentBuilder.BuildFormLines(formType, slip, width, fields);
         return await PrintViaQueueAsync(printer, lines, fontFamily, width, $"Slip_{slip.OrderId}");
     }
@@ -71,6 +74,13 @@ public class PrintingService : IXPrintingService
         catch (Exception ex)
         {
             Console.WriteLine($"[PDF Test] Ошибка сохранения: {ex.Message}");
+        }
+
+        if (IsNetworkPrinter(printer))
+        {
+            var profile = _documentBuilder.ResolvePrinterProfile(printer.Name);
+            var bytes = _documentBuilder.BuildTestPageEscPos(width, profile);
+            return await SendToDestinationAsync(printer, bytes, "Printer_Test");
         }
 
         var fontFamily = string.IsNullOrWhiteSpace(printer.FontFamily) ? "Courier New" : printer.FontFamily;
@@ -138,11 +148,12 @@ public class PrintingService : IXPrintingService
         });
     }
 
-    // ===== Запасной (неактивный) путь ESC/POS: RAW-спулер / TCP. Не используется — активна печать через очередь/GDI. =====
+    private static bool IsNetworkPrinter(PrinterDestination printer) =>
+        string.Equals(printer.ConnectionType, "Network", StringComparison.OrdinalIgnoreCase);
 
     private async Task<bool> SendToDestinationAsync(PrinterDestination printer, byte[] buffer, string documentName)
     {
-        if (string.Equals(printer.ConnectionType, "Network", StringComparison.OrdinalIgnoreCase))
+        if (IsNetworkPrinter(printer))
         {
             if (string.IsNullOrWhiteSpace(printer.Host))
                 throw new Exception("Для сетевого принтера не указан IP-адрес.");
