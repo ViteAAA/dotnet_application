@@ -46,10 +46,11 @@ public partial class PrintDocumentBuilder : IPrintDocumentBuilder
         };
     }
 
-    public int GetCharsPerLine(float widthMm) => widthMm <= 60 ? 32 : 48;
+    public int GetCharsPerLine(float widthMm) => widthMm <= 60 ? 32 : 42;
 
     public PrinterTextProfile ResolvePrinterProfile(string printerName)
     {
+        
         Encoding.RegisterProvider(CodePagesEncodingProvider.Instance);
 
         if (printerName.Contains("XP-N160II", StringComparison.OrdinalIgnoreCase))
@@ -58,19 +59,42 @@ public partial class PrintDocumentBuilder : IPrintDocumentBuilder
         if (printerName.Contains("XP-80T", StringComparison.OrdinalIgnoreCase))
             return new PrinterTextProfile(Encoding.GetEncoding(866), 17, "CP866 (Page 17)");
 
-        return new PrinterTextProfile(Encoding.GetEncoding(866), null, "CP866");
+        return new PrinterTextProfile(Encoding.GetEncoding(866), 17, "CP866");
     }
     
     private static void AddRow(List<byte> bytes, Encoding encoding, string left, string right, int charsPerLine)
     {
-        if (left.Length + right.Length + 1 > charsPerLine)
+        left ??= string.Empty;
+        right ??= string.Empty;
+
+        // Если строка целиком не помещается или под левую часть остаётся меньше 8 символов —
+        // печатаем заголовок сверху, а длинное значение прижимаем вправо на следующей строке.
+        if (left.Length + 1 + right.Length > charsPerLine && charsPerLine - right.Length - 2 < 8)
         {
-            bytes.AddRange(encoding.GetBytes(left + "\n"));
-            bytes.AddRange(encoding.GetBytes(right + "\n"));
+            if (!string.IsNullOrWhiteSpace(left))
+                AddWrappedLine(bytes, encoding, left, charsPerLine);
+
+            foreach (var line in WrapText(right, charsPerLine))
+                bytes.AddRange(encoding.GetBytes(line.PadLeft(charsPerLine) + "\n"));
             return;
         }
-        int spaces = charsPerLine - left.Length - right.Length;
-        bytes.AddRange(encoding.GetBytes(left + new string(' ', Math.Max(0, spaces)) + right + "\n"));
+
+        int leftMaxWidth = charsPerLine - (right.Length + 2);
+        var wrappedLines = WrapText(left, leftMaxWidth).ToList();
+
+        for (int i = 0; i < wrappedLines.Count; i++)
+        {
+            if (i == 0)
+            {
+                int spaces = charsPerLine - wrappedLines[i].Length - right.Length;
+                string line = wrappedLines[i] + new string(' ', Math.Max(1, spaces)) + right + "\n";
+                bytes.AddRange(encoding.GetBytes(line));
+            }
+            else
+            {
+                bytes.AddRange(encoding.GetBytes(wrappedLines[i] + "\n"));
+            }
+        }
     }
 
     #region Формирование накладной (Invoice)
@@ -133,10 +157,9 @@ public partial class PrintDocumentBuilder : IPrintDocumentBuilder
         bytes.AddRange(encoding.GetBytes(separatorLine));
 
         // Таблица позиций
-        if (charsPerLine == 48)
-            bytes.AddRange(encoding.GetBytes("Наименование          К-во      Цена    Сумма\n"));
-        else
-            bytes.AddRange(encoding.GetBytes("Наименование     К-во   Цена   Сумма\n"));
+        bytes.AddRange(charsPerLine == 48
+            ? encoding.GetBytes("Наименование          К-во      Цена    Сумма\n")
+            : encoding.GetBytes("Наименование     К-во   Цена   Сумма\n"));
 
         bytes.AddRange(encoding.GetBytes(separatorLine));
 
@@ -248,12 +271,7 @@ public partial class PrintDocumentBuilder : IPrintDocumentBuilder
 
         AddSeparator(bytes, encoding, charsPerLine);
 
-        string title = "Название / Name";
-        string qtyTitle = "Кол-во";
-        string headerLine = title.Length + qtyTitle.Length < charsPerLine
-            ? title + new string(' ', charsPerLine - title.Length - qtyTitle.Length) + qtyTitle
-            : title + " " + qtyTitle;
-        AddWrappedLine(bytes, encoding, headerLine, charsPerLine);
+        AddRow(bytes, encoding, "Название / Name", "Кол-во", charsPerLine);
 
         foreach (var item in slip.Items)
         {
@@ -261,11 +279,7 @@ public partial class PrintDocumentBuilder : IPrintDocumentBuilder
 
             var itemName = item.Name ?? "Товар / Item";
             var itemQty = $"{item.Quantity ?? 1}";
-            string itemLine = itemName.Length + itemQty.Length < charsPerLine
-                ? itemName + new string(' ', charsPerLine - itemName.Length - itemQty.Length) + itemQty
-                : itemName + " " + itemQty;
-
-            AddWrappedLine(bytes, encoding, itemLine, charsPerLine);
+            AddRow(bytes, encoding, itemName, itemQty, charsPerLine);
         }
 
         AddSeparator(bytes, encoding, charsPerLine);
@@ -326,6 +340,8 @@ public partial class PrintDocumentBuilder : IPrintDocumentBuilder
             if (field.CheckIsSeparator())
             {
                 bytes.AddRange(EscAlignLeft);
+                bytes.AddRange(GetFontSizeCommand(1));
+                bytes.AddRange(EscBoldOff);
                 var style = field.GetEffectiveSeparatorStyle().ToLowerInvariant();
                 char c = style.Contains("star") ? '*' : style.Contains("double") ? '=' : '-';
                 if (style.Contains("dash"))
@@ -343,6 +359,8 @@ public partial class PrintDocumentBuilder : IPrintDocumentBuilder
 
             if (field.CheckIsSpacer())
             {
+                bytes.AddRange(GetFontSizeCommand(1));
+                bytes.AddRange(EscBoldOff);
                 bytes.AddRange(encoding.GetBytes("\n"));
                 continue;
             }
@@ -353,7 +371,15 @@ public partial class PrintDocumentBuilder : IPrintDocumentBuilder
                 bool isKitchen = mode == "kitchen" || 
                     (field.ChildFields.Count == 2 && field.ChildFields.Any(c => c.Key == "item.quantity") && !field.ChildFields.Any(c => c.Key == "item.price"));
 
-                AddWrappedLine(bytes, encoding, field.GetEffectiveName(), charsPerLine);
+                bytes.AddRange(field.GetPrintAlign() switch
+                {
+                    PrintTextAlign.Center => EscAlignCenter,
+                    PrintTextAlign.Right => EscAlignRight,
+                    _ => EscAlignLeft
+                });
+                bytes.AddRange(GetFontSizeCommand(field.FontSize));
+                bytes.AddRange(field.IsBold ? EscBoldOn : EscBoldOff);
+                AddWrappedLine(bytes, encoding, field.GetEffectiveName(), GetEffectiveCharsPerLine(charsPerLine, field.FontSize));
 
                 bytes.AddRange(EscAlignLeft);
                 bytes.AddRange(GetFontSizeCommand(1));
@@ -361,15 +387,21 @@ public partial class PrintDocumentBuilder : IPrintDocumentBuilder
 
                 if (isKitchen)
                 {
-                    var itemName = field.ChildFields.FirstOrDefault(c => c.Key == "item.name")?.GetEffectiveName()
+                    var itemNameField = field.ChildFields.FirstOrDefault(c => c.Key == "item.name");
+                    var itemQuantityField = field.ChildFields.FirstOrDefault(c => c.Key == "item.quantity");
+                    var itemName = itemNameField?.GetEffectiveName()
                                    ?? ReceiptField.GetDefaultName("item.name");
-                    var quantityName = field.ChildFields.FirstOrDefault(c => c.Key == "item.quantity")?.GetEffectiveName()
+                    var quantityName = itemQuantityField?.GetEffectiveName()
                                        ?? ReceiptField.GetDefaultName("item.quantity");
                     AddRow(bytes, encoding, itemName, quantityName, charsPerLine);
                     foreach (var item in slip.Items)
                     {
                         AddSeparator(bytes, encoding, charsPerLine);
-                        AddRow(bytes, encoding, item.Name ?? "Товар / Item", $"{item.Quantity ?? 1}", charsPerLine);
+                        var itemFontSize = Math.Clamp(Math.Max(field.FontSize,
+                            Math.Max(itemNameField?.FontSize ?? 1, itemQuantityField?.FontSize ?? 1)), 1, 3);
+                        bytes.AddRange(GetFontSizeCommand(itemFontSize));
+                        AddRow(bytes, encoding, item.Name ?? "Товар / Item", $"{item.Quantity ?? 1}",
+                            GetEffectiveCharsPerLine(charsPerLine, itemFontSize));
                     }
                     AddSeparator(bytes, encoding, charsPerLine);
                 }
@@ -388,7 +420,7 @@ public partial class PrintDocumentBuilder : IPrintDocumentBuilder
                             {
                                 var childName = child.GetEffectiveName();
                                 var text = string.IsNullOrWhiteSpace(childName) ? childVal : $"{childName}: {childVal}";
-                                AddWrappedLine(bytes, encoding, text, charsPerLine);
+                                AddWrappedLine(bytes, encoding, text, GetEffectiveCharsPerLine(charsPerLine, child.FontSize));
                             }
                         }
                         AddSeparator(bytes, encoding, charsPerLine);
@@ -446,23 +478,26 @@ public partial class PrintDocumentBuilder : IPrintDocumentBuilder
             if (field.Key == "static.text")
             {
                 var text = string.IsNullOrWhiteSpace(field.CustomText) ? field.GetEffectiveName() : field.CustomText;
-                AddWrappedLine(bytes, encoding, text, charsPerLine);
+                AddWrappedLine(bytes, encoding, text, GetEffectiveCharsPerLine(charsPerLine, field.FontSize));
             }
             else if (field.IsRow)
             {
                 var val = ResolveOrderValue(field.Key, slip);
-                AddRow(bytes, encoding, field.GetEffectiveName(), val, charsPerLine);
+                AddRow(bytes, encoding, field.GetEffectiveName(), val,
+                    GetEffectiveCharsPerLine(charsPerLine, field.FontSize));
             }
             else
             {
                 var val = ResolveOrderValue(field.Key, slip);
                 var name = field.GetEffectiveName();
                 var text = string.IsNullOrWhiteSpace(name) ? val : $"{name}: {val}";
-                AddWrappedLine(bytes, encoding, text, charsPerLine);
+                AddWrappedLine(bytes, encoding, text, GetEffectiveCharsPerLine(charsPerLine, field.FontSize));
             }
 
             if (field.LineSpacing > 3)
             {
+                bytes.AddRange(GetFontSizeCommand(1));
+                bytes.AddRange(EscBoldOff);
                 bytes.AddRange(encoding.GetBytes("\n"));
             }
         }
@@ -610,11 +645,40 @@ public partial class PrintDocumentBuilder : IPrintDocumentBuilder
             yield break;
         }
 
-        for (var index = 0; index < text.Length; index += width)
+        width = Math.Max(1, width);
+        var currentLine = new StringBuilder();
+        foreach (var word in text.Split(' ', StringSplitOptions.RemoveEmptyEntries))
         {
-            yield return text.Substring(index, Math.Min(width, text.Length - index));
+            if (word.Length > width)
+            {
+                if (currentLine.Length > 0)
+                {
+                    yield return currentLine.ToString();
+                    currentLine.Clear();
+                }
+
+                for (var index = 0; index < word.Length; index += width)
+                    yield return word.Substring(index, Math.Min(width, word.Length - index));
+                continue;
+            }
+
+            if (currentLine.Length > 0 && currentLine.Length + word.Length + 1 > width)
+            {
+                yield return currentLine.ToString();
+                currentLine.Clear();
+            }
+
+            if (currentLine.Length > 0)
+                currentLine.Append(' ');
+            currentLine.Append(word);
         }
+
+        if (currentLine.Length > 0)
+            yield return currentLine.ToString();
     }
+
+    private static int GetEffectiveCharsPerLine(int charsPerLine, int fontSize) =>
+        fontSize >= 3 ? Math.Max(1, charsPerLine / 2) : charsPerLine;
 
     private static void AddWrappedLine(List<byte> bytes, Encoding encoding, string text, int charsPerLine)
     {
@@ -627,6 +691,9 @@ public partial class PrintDocumentBuilder : IPrintDocumentBuilder
 
     private static void AddSeparator(List<byte> bytes, Encoding encoding, int charsPerLine)
     {
+        bytes.AddRange(EscAlignLeft);
+        bytes.AddRange(GetFontSizeCommand(1));
+        bytes.AddRange(EscBoldOff);
         bytes.AddRange(encoding.GetBytes(new string('-', charsPerLine)));
         bytes.Add((byte)'\n');
     }

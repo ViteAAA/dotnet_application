@@ -10,5 +10,5 @@ public class CompanySettings
     public string SignReleased { get; set; } = "Груз сдал: --------------";
     public string SignReceived { get; set; } = "Груз принял: ------------";
     public string Footer { get; set; } = "СПАСИБО! ЖДЕМ ВАС СНОВА!";
-    public string CurrencyNote { get; set; } = "ВСЕ СУММЫ В РУБЛЯХ";
+    public string CurrencyNote { get; set; } = "";
 }

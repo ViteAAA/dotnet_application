@@ -48,7 +48,7 @@ public class ReceiptField
         "order.sales_channel" => "Канал продаж",
         "order.sign_released" => "Груз сдал",
         "order.sign_received" => "Груз принял",
-        "order.footer" => "Подвал чека",
+        "order.footer" => "",
         "block.items" => "Список товаров",
         "static.text" => "Текст",
         "item.name" => "Наименование",
