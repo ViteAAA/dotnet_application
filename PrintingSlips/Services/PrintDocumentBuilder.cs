@@ -19,6 +19,7 @@ public partial class PrintDocumentBuilder : IPrintDocumentBuilder
     private static readonly byte[] EscBoldOn = [0x1B, 0x45, 0x01];
     private static readonly byte[] EscBoldOff = [0x1B, 0x45, 0x00];
     private static readonly byte[] EscCutPaper = [0x1D, 0x56, 0x42, 0x00];
+    private static readonly byte[] GsSetPrintWidth360 = [0x1D, 0x57, 0x68, 0x01];
 
     public PrintFormResult BuildForm(
         PrintFormType formType,
@@ -46,29 +47,30 @@ public partial class PrintDocumentBuilder : IPrintDocumentBuilder
         };
     }
 
-    public int GetCharsPerLine(float widthMm) => widthMm <= 60 ? 32 : 42;
+    // 26 символов для 58 мм и 42 символа для 80 мм.
+    // Если на вашем 80-мм принтере тоже помещается только 26 символов, замените 42 на 26.
+    public int GetCharsPerLine(float widthMm) => widthMm <= 60 ? 30 : 46;
 
     public PrinterTextProfile ResolvePrinterProfile(string printerName)
     {
-        
         Encoding.RegisterProvider(CodePagesEncodingProvider.Instance);
 
-        if (printerName.Contains("XP-N160II", StringComparison.OrdinalIgnoreCase))
-            return new PrinterTextProfile(Encoding.GetEncoding(1251), 23, "Windows-1251 (Page 23)");
-
-        if (printerName.Contains("XP-80T", StringComparison.OrdinalIgnoreCase))
-            return new PrinterTextProfile(Encoding.GetEncoding(866), 17, "CP866 (Page 17)");
+        // if (printerName.Contains("XP-N160II", StringComparison.OrdinalIgnoreCase))
+        //     return new PrinterTextProfile(Encoding.GetEncoding(1251), 23, "Windows-1251 (Page 23)");
+        //
+        // if (printerName.Contains("XP-80T", StringComparison.OrdinalIgnoreCase))
+        //     return new PrinterTextProfile(Encoding.GetEncoding(866), 17, "CP866 (Page 17)");
 
         return new PrinterTextProfile(Encoding.GetEncoding(866), 17, "CP866");
     }
-    
+
     private static void AddRow(List<byte> bytes, Encoding encoding, string left, string right, int charsPerLine)
     {
         left ??= string.Empty;
         right ??= string.Empty;
 
-        // Если строка целиком не помещается или под левую часть остаётся меньше 8 символов —
-        // печатаем заголовок сверху, а длинное значение прижимаем вправо на следующей строке.
+        // Если строка целиком не помещается и под левую колонку остаётся меньше 8 символов,
+        // переносим значение на следующую строку с выравниванием по правому краю.
         if (left.Length + 1 + right.Length > charsPerLine && charsPerLine - right.Length - 2 < 8)
         {
             if (!string.IsNullOrWhiteSpace(left))
@@ -79,7 +81,9 @@ public partial class PrintDocumentBuilder : IPrintDocumentBuilder
             return;
         }
 
-        int leftMaxWidth = charsPerLine - (right.Length + 2);
+        int rightColWidth = right.Length + 2; // Оставляем небольшой отступ перед правым значением
+        int leftMaxWidth = charsPerLine - rightColWidth;
+
         var wrappedLines = WrapText(left, leftMaxWidth).ToList();
 
         for (int i = 0; i < wrappedLines.Count; i++)
@@ -96,6 +100,32 @@ public partial class PrintDocumentBuilder : IPrintDocumentBuilder
             }
         }
     }
+    
+    private static void AddCenteredLine(
+        List<byte> bytes,
+        Encoding encoding,
+        string text,
+        int charsPerLine,
+        int fontSize = 1)
+    {
+        bytes.AddRange(EscAlignLeft);
+        int effectiveWidth = GetEffectiveCharsPerLine(charsPerLine, fontSize);
+
+        foreach (var line in WrapText(text, effectiveWidth))
+        {
+            if (line.Length == 0)
+            {
+                bytes.Add((byte)'\n');
+                continue;
+            }
+
+            int leftPadding = Math.Max(0, (effectiveWidth - line.Length) / 2);
+            string centeredLine = new string(' ', leftPadding) + line;
+
+            bytes.AddRange(encoding.GetBytes(centeredLine));
+            bytes.Add((byte)'\n');
+        }
+    }
 
     #region Формирование накладной (Invoice)
 
@@ -108,37 +138,42 @@ public partial class PrintDocumentBuilder : IPrintDocumentBuilder
         var encoding = profile.Encoding;
 
         AddInitialization(bytes, profile);
+        bytes.AddRange(GsSetPrintWidth360);
 
-        // Шапка с реквизитами (аналог col.Item().PaddingTop(10).AlignLeft().Text(new string('*', 32)))
+        // Шапка с реквизитами
         bytes.AddRange(EscAlignLeft);
         bytes.AddRange(encoding.GetBytes(starsLine));
-        bytes.AddRange(encoding.GetBytes($"{slip.SellerTitle ?? string.Empty}\n"));
+        AddWrappedLine(bytes, encoding, slip.SellerTitle ?? string.Empty, charsPerLine);
         if (!string.IsNullOrWhiteSpace(slip.SellerName))
-            bytes.AddRange(encoding.GetBytes($"{slip.SellerName}\n"));
+            AddWrappedLine(bytes, encoding, slip.SellerName, charsPerLine);
         if (!string.IsNullOrWhiteSpace(slip.SellerInn))
-            bytes.AddRange(encoding.GetBytes($"ИНН {slip.SellerInn}\n"));
+            AddWrappedLine(bytes, encoding, $"ИНН {slip.SellerInn}", charsPerLine);
         bytes.AddRange(encoding.GetBytes(starsLine));
         bytes.AddRange(encoding.GetBytes("\n"));
 
         // Заголовок документа (НАКЛАДНАЯ / Заказ №)
-        bytes.AddRange(EscAlignCenter);
-        bytes.AddRange(GetFontSizeCommand(2)); // Увеличенный шрифт (примерно FontSize 10 в QuestPDF)
+        bytes.AddRange(GetFontSizeCommand(2));
         bytes.AddRange(EscBoldOn);
-        bytes.AddRange(encoding.GetBytes("НАКЛАДНАЯ / INVOICE\n"));
-        bytes.AddRange(encoding.GetBytes($"Заказ № / Order # {slip.OrderId}\n\n"));
+        AddCenteredLine(bytes, encoding, "НАКЛАДНАЯ / INVOICE", charsPerLine, fontSize: 2);
+        AddCenteredLine(bytes, encoding, $"Заказ № / Order # {slip.OrderId}", charsPerLine, fontSize: 2);
+        bytes.AddRange(encoding.GetBytes("\n"));
         bytes.AddRange(EscBoldOff);
         bytes.AddRange(GetFontSizeCommand(1));
 
         // Стороны и реквизиты
         bytes.AddRange(EscAlignLeft);
-        bytes.AddRange(encoding.GetBytes($"Грузоотправитель:\n{slip.SellerTitle}\nИНН {slip.SellerInn}\n\n"));
+        bytes.AddRange(encoding.GetBytes("Грузоотправитель:\n"));
+        AddWrappedLine(bytes, encoding, slip.SellerTitle ?? string.Empty, charsPerLine);
+        bytes.AddRange(encoding.GetBytes($"ИНН {slip.SellerInn}\n\n"));
 
         var recipientName = !string.IsNullOrWhiteSpace(slip.CustomerName) ? slip.CustomerName : "Покупатель";
-        bytes.AddRange(encoding.GetBytes($"Грузополучатель:\n{recipientName}\n"));
+        bytes.AddRange(encoding.GetBytes("Грузополучатель:\n"));
+        AddWrappedLine(bytes, encoding, recipientName, charsPerLine);
         if (!string.IsNullOrWhiteSpace(slip.CustomerPhone))
             bytes.AddRange(encoding.GetBytes($"{slip.CustomerPhone}\n"));
 
-        bytes.AddRange(encoding.GetBytes($"\nМенеджер: {slip.Manager}\n"));
+        bytes.AddRange(encoding.GetBytes("\n"));
+        AddWrappedLine(bytes, encoding, $"Менеджер: {slip.Manager}", charsPerLine);
 
         var dateStr = (slip.OrderDate ?? DateTime.Now).ToString("HH:mm dd.MM.yyyy");
 
@@ -157,10 +192,8 @@ public partial class PrintDocumentBuilder : IPrintDocumentBuilder
         bytes.AddRange(encoding.GetBytes(separatorLine));
 
         // Таблица позиций
-        bytes.AddRange(charsPerLine == 48
-            ? encoding.GetBytes("Наименование          К-во      Цена    Сумма\n")
-            : encoding.GetBytes("Наименование     К-во   Цена   Сумма\n"));
-
+        string itemsHeader = BuildItemsHeader(charsPerLine, "Наименование", "К-во", "Цена", "Сумма");
+        bytes.AddRange(encoding.GetBytes($"{itemsHeader}\n"));
         bytes.AddRange(encoding.GetBytes(separatorLine));
 
         if (slip.Items.Count > 0)
@@ -168,16 +201,13 @@ public partial class PrintDocumentBuilder : IPrintDocumentBuilder
             foreach (var item in slip.Items)
             {
                 var name = item.Name ?? "Товар";
-                bytes.AddRange(encoding.GetBytes($"{name}\n"));
+                AddWrappedLine(bytes, encoding, name, charsPerLine);
 
                 var qtyStr = $"{item.Quantity ?? 1} шт x";
                 var priceStr = $"{item.Price?.ToString("F2") ?? "0.00"}";
                 var totalStr = $"{item.TotalPrice?.ToString("F2") ?? "0.00"}";
 
-                string detailLine = charsPerLine == 48
-                    ? string.Format("  {0,-15} {1,8} {2,8} {3,10}", "", qtyStr, priceStr, totalStr)
-                    : string.Format("  {0,-10} {1,5} {2,6} {3,7}", "", qtyStr, priceStr, totalStr);
-
+                string detailLine = BuildItemDetailLine(charsPerLine, qtyStr, priceStr, totalStr);
                 bytes.AddRange(encoding.GetBytes($"{detailLine}\n"));
             }
             bytes.AddRange(encoding.GetBytes(separatorLine));
@@ -192,23 +222,29 @@ public partial class PrintDocumentBuilder : IPrintDocumentBuilder
         AddRow(bytes, encoding, payMethod, totalAmountStr, charsPerLine);
         bytes.AddRange(encoding.GetBytes("\n"));
 
-        bytes.AddRange(encoding.GetBytes($"{slip.SignReleased ?? string.Empty}\n\n"));
-        bytes.AddRange(encoding.GetBytes($"{slip.SignReceived ?? string.Empty}\n\n"));
+        if (!string.IsNullOrWhiteSpace(slip.SignReleased))
+            AddWrappedLine(bytes, encoding, slip.SignReleased, charsPerLine);
+        bytes.AddRange(encoding.GetBytes("\n"));
+
+        if (!string.IsNullOrWhiteSpace(slip.SignReceived))
+            AddWrappedLine(bytes, encoding, slip.SignReceived, charsPerLine);
+        bytes.AddRange(encoding.GetBytes("\n"));
 
         if (!string.IsNullOrWhiteSpace(slip.CustomerNote))
         {
-            bytes.AddRange(encoding.GetBytes($"Комментарий к заказу:\n{slip.CustomerNote}\n"));
+            bytes.AddRange(encoding.GetBytes("Комментарий к заказу:\n"));
+            AddWrappedLine(bytes, encoding, slip.CustomerNote, charsPerLine);
         }
         else
         {
             bytes.AddRange(encoding.GetBytes("Комментарий к заказу:\n"));
         }
 
-        bytes.AddRange(encoding.GetBytes($"Способ оплаты: {payMethod}\n"));
-        bytes.AddRange(encoding.GetBytes($"Количество персон: {slip.PersonsCount}\n"));
-        bytes.AddRange(encoding.GetBytes($"Канал продаж: {slip.SalesChannel}\n"));
-        bytes.AddRange(encoding.GetBytes($"Номер заказа FN: {slip.OrderId}\n"));
-        
+        AddWrappedLine(bytes, encoding, $"Способ оплаты: {payMethod}", charsPerLine);
+        AddWrappedLine(bytes, encoding, $"Количество персон: {slip.PersonsCount}", charsPerLine);
+        AddWrappedLine(bytes, encoding, $"Канал продаж: {slip.SalesChannel}", charsPerLine);
+        AddWrappedLine(bytes, encoding, $"Номер заказа FN: {slip.OrderId}", charsPerLine);
+
         bytes.AddRange(encoding.GetBytes(separatorLine));
         bytes.AddRange(encoding.GetBytes(separatorLine));
         bytes.AddRange(encoding.GetBytes(separatorLine));
@@ -218,13 +254,21 @@ public partial class PrintDocumentBuilder : IPrintDocumentBuilder
         bytes.AddRange(EscAlignLeft);
         bytes.AddRange(EscBoldOn);
         bytes.AddRange(GetFontSizeCommand(2));
-        bytes.AddRange(encoding.GetBytes($"{slip.DeliveryType ?? string.Empty}\n"));
+        AddWrappedLine(bytes, encoding, slip.DeliveryType ?? string.Empty, charsPerLine);
         bytes.AddRange(EscBoldOff);
         bytes.AddRange(GetFontSizeCommand(1));
 
         bytes.AddRange(EscAlignCenter);
-        bytes.AddRange(encoding.GetBytes($"\n{slip.CurrencyNote ?? string.Empty}\n"));
-        bytes.AddRange(encoding.GetBytes($"{slip.Footer ?? string.Empty}\n\n\n"));
+        if (!string.IsNullOrWhiteSpace(slip.CurrencyNote))
+        {
+            bytes.AddRange(encoding.GetBytes("\n"));
+            AddCenteredLine(bytes, encoding, slip.CurrencyNote, charsPerLine);
+        }
+        if (!string.IsNullOrWhiteSpace(slip.Footer))
+        {
+            AddCenteredLine(bytes, encoding, slip.Footer, charsPerLine);
+        }
+        bytes.AddRange(encoding.GetBytes("\n\n\n"));
         bytes.AddRange(EscCutPaper);
 
         return [.. bytes];
@@ -240,7 +284,6 @@ public partial class PrintDocumentBuilder : IPrintDocumentBuilder
         var charsPerLine = GetCharsPerLine(widthMm);
         var encoding = profile.Encoding;
         var orderTime = slip.OrderDate?.ToString("HH:mm") ?? DateTime.Now.ToString("HH:mm");
-        // Крупное время сверху — «доставить к», как на образцах iiko; иначе время оформления.
         var headlineTime = ExtractClock(slip.DeliveryTime) ?? orderTime;
 
         AddInitialization(bytes, profile);
@@ -250,7 +293,7 @@ public partial class PrintDocumentBuilder : IPrintDocumentBuilder
         bytes.AddRange(EscAlignCenter);
         bytes.AddRange(EscBoldOn);
         bytes.AddRange(GetFontSizeCommand(3));
-        AddWrappedLine(bytes, encoding, headlineTime, charsPerLine);
+        AddWrappedLine(bytes, encoding, headlineTime, GetEffectiveCharsPerLine(charsPerLine, 3));
         bytes.AddRange(GetFontSizeCommand(1));
         bytes.AddRange(EscBoldOff);
 
@@ -284,7 +327,6 @@ public partial class PrintDocumentBuilder : IPrintDocumentBuilder
 
         AddSeparator(bytes, encoding, charsPerLine);
 
-        // Самовывоз: адрес можно скрыть; для доставки — как на образцах.
         var address = slip.ShippingAddress ?? slip.BillingAddress1;
         if (!string.IsNullOrWhiteSpace(address))
             AddWrappedLine(bytes, encoding, $"Адрес / Address: {address}", charsPerLine);
@@ -308,7 +350,6 @@ public partial class PrintDocumentBuilder : IPrintDocumentBuilder
         if (string.IsNullOrWhiteSpace(deliveryTime))
             return null;
 
-        // Ищем HH:mm в строке вида "10.09 13:42" или "13:42".
         for (var i = 0; i + 4 < deliveryTime.Length; i++)
         {
             if (char.IsDigit(deliveryTime[i]) &&
@@ -346,7 +387,6 @@ public partial class PrintDocumentBuilder : IPrintDocumentBuilder
                 char c = style.Contains("star") ? '*' : style.Contains("double") ? '=' : '-';
                 if (style.Contains("dash"))
                 {
-                    // Пунктир чередованием дефисов и пробелов
                     var dashed = string.Concat(Enumerable.Repeat("- ", charsPerLine / 2));
                     bytes.AddRange(encoding.GetBytes(dashed.PadRight(charsPerLine) + "\n"));
                 }
@@ -368,7 +408,7 @@ public partial class PrintDocumentBuilder : IPrintDocumentBuilder
             if (field.Key == "block.items")
             {
                 var mode = field.ItemDisplayMode?.Trim().ToLowerInvariant() ?? "table";
-                bool isKitchen = mode == "kitchen" || 
+                bool isKitchen = mode == "kitchen" ||
                     (field.ChildFields.Count == 2 && field.ChildFields.Any(c => c.Key == "item.quantity") && !field.ChildFields.Any(c => c.Key == "item.price"));
 
                 bytes.AddRange(field.GetPrintAlign() switch
@@ -437,9 +477,8 @@ public partial class PrintDocumentBuilder : IPrintDocumentBuilder
                                     ?? ReceiptField.GetDefaultName("item.price");
                     var totalName = field.ChildFields.FirstOrDefault(c => c.Key == "item.total")?.GetEffectiveName()
                                     ?? ReceiptField.GetDefaultName("item.total");
-                    var header = charsPerLine == 48
-                        ? $"{itemName,-22} {quantityName,8} {priceName,8} {totalName,10}"
-                        : $"{itemName,-15} {quantityName,5} {priceName,6} {totalName,7}";
+
+                    var header = BuildItemsHeader(charsPerLine, itemName, quantityName, priceName, totalName);
                     bytes.AddRange(encoding.GetBytes(header + "\n"));
 
                     AddSeparator(bytes, encoding, charsPerLine);
@@ -448,16 +487,13 @@ public partial class PrintDocumentBuilder : IPrintDocumentBuilder
                         foreach (var item in slip.Items)
                         {
                             var name = item.Name ?? "Товар";
-                            bytes.AddRange(encoding.GetBytes($"{name}\n"));
+                            AddWrappedLine(bytes, encoding, name, charsPerLine);
 
                             var qtyStr = $"{item.Quantity ?? 1} шт x";
                             var priceStr = $"{item.Price?.ToString("F2") ?? "0.00"}";
                             var totalStr = $"{item.TotalPrice?.ToString("F2") ?? (item.Subtotal?.ToString("F2") ?? "0.00")}";
 
-                            string detailLine = charsPerLine == 48
-                                ? string.Format("  {0,-15} {1,8} {2,8} {3,10}", "", qtyStr, priceStr, totalStr)
-                                : string.Format("  {0,-10} {1,5} {2,6} {3,7}", "", qtyStr, priceStr, totalStr);
-
+                            string detailLine = BuildItemDetailLine(charsPerLine, qtyStr, priceStr, totalStr);
                             bytes.AddRange(encoding.GetBytes($"{detailLine}\n"));
                         }
                         AddSeparator(bytes, encoding, charsPerLine);
@@ -569,7 +605,7 @@ public partial class PrintDocumentBuilder : IPrintDocumentBuilder
         bytes.AddRange(GetFontSizeCommand(2));
         AddWrappedLine(bytes, encoding, "Font size 2 / размер 2", charsPerLine);
         bytes.AddRange(GetFontSizeCommand(3));
-        AddWrappedLine(bytes, encoding, "Font size 3 / размер 3", charsPerLine);
+        AddWrappedLine(bytes, encoding, "Font size 3 / размер 3", GetEffectiveCharsPerLine(charsPerLine, 3));
         bytes.AddRange(GetFontSizeCommand(1));
         bytes.AddRange(EscBoldOn);
         AddWrappedLine(bytes, encoding, "Bold / Жирный", charsPerLine);
@@ -584,6 +620,33 @@ public partial class PrintDocumentBuilder : IPrintDocumentBuilder
     #endregion
 
     #region Вспомогательные методы подстановки и форматирования
+
+    private static string BuildItemsHeader(int charsPerLine, string itemName, string qtyName, string priceName, string totalName)
+    {
+        int qtyW = charsPerLine >= 42 ? 8 : 6;
+        int priceW = charsPerLine >= 42 ? 9 : 6;
+        int totalW = charsPerLine >= 42 ? 10 : 6;
+        int nameW = Math.Max(5, charsPerLine - (qtyW + priceW + totalW + 3));
+
+        if (itemName.Length > nameW)
+            itemName = nameW >= 5 ? itemName[..(nameW - 1)] + "." : itemName[..nameW];
+
+        if (qtyName.Length > qtyW) qtyName = qtyName[..qtyW];
+        if (priceName.Length > priceW) priceName = priceName[..priceW];
+        if (totalName.Length > totalW) totalName = totalName[..totalW];
+
+        return $"{itemName.PadRight(nameW)} {qtyName.PadLeft(qtyW)} {priceName.PadLeft(priceW)} {totalName.PadLeft(totalW)}";
+    }
+
+    private static string BuildItemDetailLine(int charsPerLine, string qtyStr, string priceStr, string totalStr)
+    {
+        int qtyW = charsPerLine >= 42 ? 8 : 6;
+        int priceW = charsPerLine >= 42 ? 9 : 6;
+        int totalW = charsPerLine >= 42 ? 10 : 6;
+        int indent = Math.Max(0, charsPerLine - (qtyW + priceW + totalW + 2));
+
+        return $"{new string(' ', indent)}{qtyStr.PadLeft(qtyW)} {priceStr.PadLeft(priceW)} {totalStr.PadLeft(totalW)}";
+    }
 
     public static string ResolveOrderValue(string key, Slip slip) => key switch
     {

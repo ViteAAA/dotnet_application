@@ -184,11 +184,11 @@ public static class ProcessingData
             new ReceiptField("Позиции / Items", "block.items")
             {
                 ItemDisplayMode = "Kitchen",
-                ChildFields = new ObservableCollection<ReceiptField>
-                {
+                ChildFields =
+                [
                     new ReceiptField("Название / Name", "item.name"),
                     new ReceiptField("Кол-во / Qty", "item.quantity")
-                }
+                ]
             },
             new ReceiptField("--- Разделитель ---", "separator.dashed") { IsSeparator = true, SeparatorStyle = "Dashed" },
             new ReceiptField("Адрес / Address:", "shipping.address_1"),

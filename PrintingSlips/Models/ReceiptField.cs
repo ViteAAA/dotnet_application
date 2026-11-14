@@ -49,7 +49,7 @@ public class ReceiptField
         "order.sign_released" => "Груз сдал",
         "order.sign_received" => "Груз принял",
         "order.footer" => "",
-        "block.items" => "Список товаров",
+        "block.items" => "",
         "static.text" => "Текст",
         "item.name" => "Наименование",
         "item.quantity" => "Кол-во",
