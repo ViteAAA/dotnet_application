@@ -34,26 +34,35 @@ public static class WindowsQueuePrinter
             throw new Exception($"Принтер [{printerName}] не найден в Windows. Проверьте имя очереди печати.");
 
         var widthHundredths = (int)Math.Round(widthMm / 25.4f * 100f);
+        // Реальная ширина печатающей головки (58 мм лента → 48 мм, 80 мм → 72 мм).
+        // Рисуем только в ней, иначе центр смещается вправо и правый край обрезается.
+        var headHundredths = (int)Math.Round(GetPrintableWidthMm(widthMm) / 25.4f * 100f);
 
         // Предварительный расчёт высоты, чтобы весь чек поместился на одну «страницу» рулона.
-        var heightHundredths = MeasureHeight(lines, family, widthMm, widthHundredths) + 50;
+        var heightHundredths = MeasureHeight(lines, family, widthMm, headHundredths) + 50;
         heightHundredths = Math.Clamp(heightHundredths, 100, 20000); // до ~5 м
 
         doc.DefaultPageSettings.PaperSize = new PaperSize("Receipt", widthHundredths, heightHundredths);
         doc.DefaultPageSettings.Margins = new Margins(0, 0, 0, 0);
+        doc.OriginAtMargins = false; // (0,0) = левый верхний угол печатной области драйвера
 
         doc.PrintPage += (_, e) =>
         {
             var g = e.Graphics!;
             g.PageUnit = GraphicsUnit.Display; // 1/100 дюйма
-            // Печатная область драйвера (учитывает аппаратные поля XPrinter).
-            var area = e.MarginBounds.Width > 0 ? e.MarginBounds : e.PageBounds;
-            float printableWidth = Math.Min(area.Width, widthHundredths);
-            if (e.PageSettings.PrintableArea.Width > 0)
-                printableWidth = Math.Min(printableWidth, e.PageSettings.PrintableArea.Width);
-            float left = Math.Max(0, area.Left - e.PageSettings.HardMarginX);
+
+            // Ширина = минимум из: печатной области драйвера, ширины ленты и ширины головки.
+            // Драйвер XPrinter часто отдаёт PrintableArea шире головки (бумага 80 мм / 58 мм без полей,
+            // или игнорирует наш PaperSize) — тогда центр «уезжал» и текст обрезался справа.
+            float printableWidth = headHundredths;
+            var printable = e.PageSettings.PrintableArea;
+            if (printable.Width > 0)
+                printableWidth = Math.Min(printableWidth, printable.Width);
+            if (e.PageBounds.Width > 0)
+                printableWidth = Math.Min(printableWidth, e.PageBounds.Width);
+
             float y = 0;
-            DrawLines(g, lines, family, widthMm, left, printableWidth, ref y);
+            DrawLines(g, lines, family, widthMm, 0, printableWidth, ref y);
             e.HasMorePages = false;
         };
 
@@ -125,7 +134,7 @@ public static class WindowsQueuePrinter
                 continue;
             }
 
-            using var sf = new StringFormat { Alignment = ToAlignment(line.Align) };
+            using var sf = new StringFormat { Alignment = ToAlignment(line.Align), Trimming = StringTrimming.None };
             var text = string.IsNullOrEmpty(line.Text) ? " " : line.Text;
             var size = g.MeasureString(text, font, (int)width, sf);
             g.DrawString(text, font, Brushes.Black, rect, sf);
@@ -143,6 +152,15 @@ public static class WindowsQueuePrinter
         DrawLines(g, lines, family, widthMm, 0, widthHundredths, ref y);
         return (int)Math.Ceiling(y * 1.15f) + 80;
     }
+
+    /// <summary>Физическая ширина печати термоголовки, мм (XP-58: 48 мм / 384 точки, XP-80: 72 мм / 576 точек).</summary>
+    public static float GetPrintableWidthMm(float paperWidthMm) => paperWidthMm switch
+    {
+        <= 0 => 72f,
+        <= 60 => Math.Min(paperWidthMm, 48f),
+        <= 82 => Math.Min(paperWidthMm, 72f),
+        _ => paperWidthMm - 8f
+    };
 
     private static Font CreateFont(string family, PrintTextLine line, float widthMm) =>
         new(family, MapSize(line.FontSize, widthMm), line.Bold ? FontStyle.Bold : FontStyle.Regular, GraphicsUnit.Point);

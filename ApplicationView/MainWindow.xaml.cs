@@ -492,14 +492,17 @@ public partial class MainWindow : Window
             return;
         }
 
-        ApplyCompanyDefaults(slip);
+        // Реквизиты/подписи/подвал берём из СВЕЖИХ настроек (company.json) при каждой печати.
+        // Печатаем копию: в историю заказа (SlipData) реквизиты не «запекаются»,
+        // иначе после первой печати изменённые реквизиты больше не подхватывались.
+        var printSlip = WithCompanySettings(slip);
 
         var printTasks = selectedPrinters.Select(async printer =>
         {
             try
             {
                 var destination = ToDestination(printer);
-                var success = await _printingService.PrintSlipAsync(slip, destination);
+                var success = await _printingService.PrintSlipAsync(printSlip, destination);
                 return (PrinterName: printer.Name, Success: success, ErrorMessage: (string?)null);
             }
             catch (Exception ex)
@@ -563,20 +566,38 @@ public partial class MainWindow : Window
         FontFamily = string.IsNullOrWhiteSpace(printer.DefaultFontFamily) ? "Courier New" : printer.DefaultFontFamily
     };
 
-    private static void ApplyCompanyDefaults(Slip slip)
+    /// <summary>
+    /// Возвращает копию чека с реквизитами из сохранённых настроек «Реквизиты продавца».
+    /// Продавец, ФИО, ИНН, подписи, подвал и канал продаж — всегда из настроек (если заполнены).
+    /// Менеджер — из заказа WooCommerce (meta manager), иначе «Менеджер по умолчанию» из настроек.
+    /// </summary>
+    private static Slip WithCompanySettings(Slip source)
     {
+        var json = System.Text.Json.JsonSerializer.Serialize(source);
+        var slip = System.Text.Json.JsonSerializer.Deserialize<Slip>(json) ?? source;
+
         var company = ProcessingData.LoadCompanySettings();
-        if (string.IsNullOrWhiteSpace(slip.SellerTitle)) slip.SellerTitle = company.SellerTitle;
-        if (string.IsNullOrWhiteSpace(slip.SellerName)) slip.SellerName = company.SellerName;
-        if (string.IsNullOrWhiteSpace(slip.SellerInn)) slip.SellerInn = company.Inn;
-        if (string.IsNullOrWhiteSpace(slip.Manager)) slip.Manager = company.Manager;
-        if (string.IsNullOrWhiteSpace(slip.SalesChannel)) slip.SalesChannel = company.SalesChannel;
-        if (string.IsNullOrWhiteSpace(slip.SignReleased)) slip.SignReleased = company.SignReleased;
-        if (string.IsNullOrWhiteSpace(slip.SignReceived)) slip.SignReceived = company.SignReceived;
-        if (string.IsNullOrWhiteSpace(slip.Footer)) slip.Footer = company.Footer;
-        if (string.IsNullOrWhiteSpace(slip.CurrencyNote)) slip.CurrencyNote = company.CurrencyNote;
+        var legacyDefaults = new CompanySettings();
+
+        slip.SellerTitle = company.SellerTitle;
+        slip.SellerName = company.SellerName;
+        slip.SellerInn = company.Inn;
+        slip.SignReleased = company.SignReleased;
+        slip.SignReceived = company.SignReceived;
+        slip.Footer = company.Footer;
+        slip.CurrencyNote = company.CurrencyNote;
+
+        if (!string.IsNullOrWhiteSpace(company.SalesChannel))
+            slip.SalesChannel = company.SalesChannel;
+
+        // Старые записи в processed_orders.json могли сохранить дефолт "MaxFood" — считаем его пустым.
+        if (string.IsNullOrWhiteSpace(slip.Manager) ||
+            string.Equals(slip.Manager, legacyDefaults.Manager, StringComparison.Ordinal))
+            slip.Manager = company.Manager;
+
         if (string.IsNullOrWhiteSpace(slip.PersonsCount)) slip.PersonsCount = "1";
         if (string.IsNullOrWhiteSpace(slip.DeliveryType)) slip.DeliveryType = slip.ShippingMethod ?? "Доставка";
+        return slip;
     }
 
     private void BtnConfigureReceipt_Click(object sender, RoutedEventArgs e)
