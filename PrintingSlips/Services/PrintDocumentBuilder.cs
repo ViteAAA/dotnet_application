@@ -101,17 +101,18 @@ public partial class PrintDocumentBuilder : IPrintDocumentBuilder
         }
     }
     
-    private static void AddCenteredLine(
+    private static void AddAlignedLine(
         List<byte> bytes,
         Encoding encoding,
         string text,
         int charsPerLine,
+        PrintTextAlign align = PrintTextAlign.Left,
         int fontSize = 1)
     {
         bytes.AddRange(EscAlignLeft);
         int effectiveWidth = GetEffectiveCharsPerLine(charsPerLine, fontSize);
 
-        foreach (var line in WrapText(text, effectiveWidth))
+        foreach (var line in WrapText(text ?? string.Empty, effectiveWidth))
         {
             if (line.Length == 0)
             {
@@ -119,10 +120,14 @@ public partial class PrintDocumentBuilder : IPrintDocumentBuilder
                 continue;
             }
 
-            int leftPadding = Math.Max(0, (effectiveWidth - line.Length) / 2);
-            string centeredLine = new string(' ', leftPadding) + line;
+            string formattedLine = align switch
+            {
+                PrintTextAlign.Center => new string(' ', Math.Max(0, (effectiveWidth - line.Length) / 2)) + line,
+                PrintTextAlign.Right => line.PadLeft(effectiveWidth),
+                _ => line
+            };
 
-            bytes.AddRange(encoding.GetBytes(centeredLine));
+            bytes.AddRange(encoding.GetBytes(formattedLine));
             bytes.Add((byte)'\n');
         }
     }
@@ -154,8 +159,8 @@ public partial class PrintDocumentBuilder : IPrintDocumentBuilder
         // Заголовок документа (НАКЛАДНАЯ / Заказ №)
         bytes.AddRange(GetFontSizeCommand(2));
         bytes.AddRange(EscBoldOn);
-        AddCenteredLine(bytes, encoding, "НАКЛАДНАЯ / INVOICE", charsPerLine, fontSize: 2);
-        AddCenteredLine(bytes, encoding, $"Заказ № / Order # {slip.OrderId}", charsPerLine, fontSize: 2);
+        AddAlignedLine(bytes, encoding, "НАКЛАДНАЯ / INVOICE", charsPerLine, fontSize: 2);
+        AddAlignedLine(bytes, encoding, $"Заказ № / Order # {slip.OrderId}", charsPerLine, fontSize: 2);
         bytes.AddRange(encoding.GetBytes("\n"));
         bytes.AddRange(EscBoldOff);
         bytes.AddRange(GetFontSizeCommand(1));
@@ -262,11 +267,11 @@ public partial class PrintDocumentBuilder : IPrintDocumentBuilder
         if (!string.IsNullOrWhiteSpace(slip.CurrencyNote))
         {
             bytes.AddRange(encoding.GetBytes("\n"));
-            AddCenteredLine(bytes, encoding, slip.CurrencyNote, charsPerLine);
+            AddAlignedLine(bytes, encoding, slip.CurrencyNote, charsPerLine);
         }
         if (!string.IsNullOrWhiteSpace(slip.Footer))
         {
-            AddCenteredLine(bytes, encoding, slip.Footer, charsPerLine);
+            AddAlignedLine(bytes, encoding, slip.Footer, charsPerLine);
         }
         bytes.AddRange(encoding.GetBytes("\n\n\n"));
         bytes.AddRange(EscCutPaper);
@@ -411,15 +416,10 @@ public partial class PrintDocumentBuilder : IPrintDocumentBuilder
                 bool isKitchen = mode == "kitchen" ||
                     (field.ChildFields.Count == 2 && field.ChildFields.Any(c => c.Key == "item.quantity") && !field.ChildFields.Any(c => c.Key == "item.price"));
 
-                bytes.AddRange(field.GetPrintAlign() switch
-                {
-                    PrintTextAlign.Center => EscAlignCenter,
-                    PrintTextAlign.Right => EscAlignRight,
-                    _ => EscAlignLeft
-                });
+                // Выравниваем заголовок блока товаров программно внутри charsPerLine
                 bytes.AddRange(GetFontSizeCommand(field.FontSize));
                 bytes.AddRange(field.IsBold ? EscBoldOn : EscBoldOff);
-                AddWrappedLine(bytes, encoding, field.GetEffectiveName(), GetEffectiveCharsPerLine(charsPerLine, field.FontSize));
+                AddAlignedLine(bytes, encoding, field.GetEffectiveName(), charsPerLine, field.GetPrintAlign(), field.FontSize);
 
                 bytes.AddRange(EscAlignLeft);
                 bytes.AddRange(GetFontSizeCommand(1));
@@ -468,7 +468,6 @@ public partial class PrintDocumentBuilder : IPrintDocumentBuilder
                 }
                 else
                 {
-                    // Table (как в default накладной)
                     var itemName = field.ChildFields.FirstOrDefault(c => c.Key == "item.name")?.GetEffectiveName()
                                    ?? ReceiptField.GetDefaultName("item.name");
                     var quantityName = field.ChildFields.FirstOrDefault(c => c.Key == "item.quantity")?.GetEffectiveName()
@@ -502,22 +501,17 @@ public partial class PrintDocumentBuilder : IPrintDocumentBuilder
                 continue;
             }
 
-            bytes.AddRange(field.GetPrintAlign() switch
-            {
-                PrintTextAlign.Center => EscAlignCenter,
-                PrintTextAlign.Right => EscAlignRight,
-                _ => EscAlignLeft
-            });
             bytes.AddRange(GetFontSizeCommand(field.FontSize));
             bytes.AddRange(field.IsBold ? EscBoldOn : EscBoldOff);
 
             if (field.Key == "static.text")
             {
                 var text = string.IsNullOrWhiteSpace(field.CustomText) ? field.GetEffectiveName() : field.CustomText;
-                AddWrappedLine(bytes, encoding, text, GetEffectiveCharsPerLine(charsPerLine, field.FontSize));
+                AddAlignedLine(bytes, encoding, text, charsPerLine, field.GetPrintAlign(), field.FontSize);
             }
             else if (field.IsRow)
             {
+                bytes.AddRange(EscAlignLeft);
                 var val = ResolveOrderValue(field.Key, slip);
                 AddRow(bytes, encoding, field.GetEffectiveName(), val,
                     GetEffectiveCharsPerLine(charsPerLine, field.FontSize));
@@ -527,7 +521,7 @@ public partial class PrintDocumentBuilder : IPrintDocumentBuilder
                 var val = ResolveOrderValue(field.Key, slip);
                 var name = field.GetEffectiveName();
                 var text = string.IsNullOrWhiteSpace(name) ? val : $"{name}: {val}";
-                AddWrappedLine(bytes, encoding, text, GetEffectiveCharsPerLine(charsPerLine, field.FontSize));
+                AddAlignedLine(bytes, encoding, text, charsPerLine, field.GetPrintAlign(), field.FontSize);
             }
 
             if (field.LineSpacing > 3)
