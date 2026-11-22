@@ -1,6 +1,8 @@
 using System.Text;
 using PrintingSlips.Interfaces;
 using PrintingSlips.Models;
+using System.Text.RegularExpressions;
+
 
 namespace PrintingSlips.Services;
 
@@ -49,7 +51,7 @@ public partial class PrintDocumentBuilder : IPrintDocumentBuilder
 
     // 26 символов для 58 мм и 42 символа для 80 мм.
     // Если на вашем 80-мм принтере тоже помещается только 26 символов, замените 42 на 26.
-    public int GetCharsPerLine(float widthMm) => widthMm <= 60 ? 30 : 46;
+    public int GetCharsPerLine(float widthMm) => widthMm <= 60 ? 28 : 46;
 
     public PrinterTextProfile ResolvePrinterProfile(string printerName)
     {
@@ -661,7 +663,11 @@ public partial class PrintDocumentBuilder : IPrintDocumentBuilder
         "shipping.first_name" => slip.ShippingFirstName ?? string.Empty,
         "shipping.last_name" => slip.ShippingLastName ?? string.Empty,
         "shipping.city" => slip.ShippingCity ?? string.Empty,
-        "shipping.address_1" => slip.ShippingAddress ?? string.Empty,
+        "shipping.address_1" => AddDotsToAddressRegex().Replace(
+            CutShippingAddress().Replace(slip.ShippingAddress ?? string.Empty, string.Empty).Trim(), 
+            "$1."
+        ),
+        // "shipping.address_1" => slip.ShippingAddress ?? string.Empty,
         "order.total" => slip.TotalAmount?.ToString("F2") ?? "0.00",
         "order.shipping_total" => slip.ShippingTotal?.ToString("F2") ?? "0.00",
         "order.discount_total" => slip.DiscountTotal?.ToString("F2") ?? "0.00",
@@ -773,6 +779,12 @@ public partial class PrintDocumentBuilder : IPrintDocumentBuilder
 
         return [0x1B, 0x21, (byte)mode];
     }
+
+    [GeneratedRegex(@"^Донецкая Народная респ\.?[\s,]*", RegexOptions.IgnoreCase, "ru-RU")]
+    private static partial Regex CutShippingAddress();
+    
+    [GeneratedRegex(@"(?<![а-яА-ЯёЁ])(ул|г|д|кв)(?![а-яА-ЯёЁ\.])", RegexOptions.IgnoreCase)]
+    private static partial Regex AddDotsToAddressRegex();
 
     #endregion
 }
