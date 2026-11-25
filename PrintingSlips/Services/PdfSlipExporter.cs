@@ -236,6 +236,9 @@ public class PdfSlipExporter : IPdfSlipExporter
         var minusTimes = 42;
         var minusTimesForLittleFont = 71;
         var subFontSize = 5;
+        var address = PrintDocumentBuilder.FormatAddress(slip.ShippingAddress ?? slip.BillingAddress1);
+        if (string.IsNullOrWhiteSpace(address))
+            address = "Не указан";
         var doc = Document.Create(container =>
         {
             container.Page(page =>
@@ -279,7 +282,7 @@ public class PdfSlipExporter : IPdfSlipExporter
                     }
 
                     col.Item().PaddingTop(15).Text(new string('-', minusTimesForLittleFont)).FontSize(subFontSize);
-                    col.Item().Text($"Адрес: {slip.ShippingAddress ?? slip.BillingAddress1 ?? "Не указан"}").FontSize(subFontSize);
+                    col.Item().Text($"Адрес: {address}").FontSize(subFontSize);
                     if (!string.IsNullOrWhiteSpace(slip.CustomerNote))
                         col.Item().Text($"Ком. к заказу: {slip.CustomerNote}").FontSize(subFontSize);
                     var recipient = !string.IsNullOrWhiteSpace(slip.CustomerName) ? slip.CustomerName : "Покупатель";

@@ -334,7 +334,7 @@ public partial class PrintDocumentBuilder : IPrintDocumentBuilder
 
         AddSeparator(bytes, encoding, charsPerLine);
 
-        var address = slip.ShippingAddress ?? slip.BillingAddress1;
+        var address = FormatAddress(slip.ShippingAddress ?? slip.BillingAddress1);
         if (!string.IsNullOrWhiteSpace(address))
             AddWrappedLine(bytes, encoding, $"Адрес / Address: {address}", charsPerLine);
 
@@ -658,16 +658,12 @@ public partial class PrintDocumentBuilder : IPrintDocumentBuilder
         "billing.phone" => slip.CustomerPhone ?? string.Empty,
         "billing.email" => slip.CustomerEmail ?? string.Empty,
         "billing.city" => slip.BillingCity ?? string.Empty,
-        "billing.address_1" => slip.BillingAddress1 ?? string.Empty,
+        "billing.address_1" => FormatAddress(slip.BillingAddress1),
         "billing.postcode" => slip.BillingPostcode ?? string.Empty,
         "shipping.first_name" => slip.ShippingFirstName ?? string.Empty,
         "shipping.last_name" => slip.ShippingLastName ?? string.Empty,
         "shipping.city" => slip.ShippingCity ?? string.Empty,
-        "shipping.address_1" => AddDotsToAddressRegex().Replace(
-            CutShippingAddress().Replace(slip.ShippingAddress ?? string.Empty, string.Empty).Trim(), 
-            "$1."
-        ),
-        // "shipping.address_1" => slip.ShippingAddress ?? string.Empty,
+        "shipping.address_1" => FormatAddress(slip.ShippingAddress),
         "order.total" => slip.TotalAmount?.ToString("F2") ?? "0.00",
         "order.shipping_total" => slip.ShippingTotal?.ToString("F2") ?? "0.00",
         "order.discount_total" => slip.DiscountTotal?.ToString("F2") ?? "0.00",
@@ -779,6 +775,15 @@ public partial class PrintDocumentBuilder : IPrintDocumentBuilder
 
         return [0x1B, 0x21, (byte)mode];
     }
+
+    /// <summary>
+    /// Убирает префикс «Донецкая Народная респ.» и ставит точки в сокращениях (г., ул., д., кв.).
+    /// </summary>
+    internal static string FormatAddress(string? address) =>
+        AddDotsToAddressRegex().Replace(
+            CutShippingAddress().Replace(address ?? string.Empty, string.Empty).Trim(),
+            "$1."
+        );
 
     [GeneratedRegex(@"^Донецкая Народная респ\.?[\s,]*", RegexOptions.IgnoreCase, "ru-RU")]
     private static partial Regex CutShippingAddress();

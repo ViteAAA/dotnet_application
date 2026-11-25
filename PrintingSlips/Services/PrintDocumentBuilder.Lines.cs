@@ -135,7 +135,7 @@ public partial class PrintDocumentBuilder
         }
         AddSeparatorLine(l);
 
-        var address = slip.ShippingAddress ?? slip.BillingAddress1;
+        var address = FormatAddress(slip.ShippingAddress ?? slip.BillingAddress1);
         if (!string.IsNullOrWhiteSpace(address)) AddLine(l, $"Адрес / Address: {address}");
         if (!string.IsNullOrWhiteSpace(slip.CustomerNote)) AddLine(l, $"Ком. к заказу / Note: {slip.CustomerNote}");
         AddLine(l, $"Оплата / Payment: {slip.PaymentMethod ?? "—"}");
